@@ -131,7 +131,7 @@ function deckDetails(kind: VesselKind, deck: string, accent: string): string {
   }
 }
 
-function navLights(accent: string): string {
+function navLights(): string {
   return `
     <circle cx="5.05" cy="1.1" r="0.6" fill="#FF4B42" opacity="0.95" style="filter:drop-shadow(0 0 1.6px rgba(255,75,66,0.9))"/>
     <circle cx="6.95" cy="1.1" r="0.6" fill="#47E57C" opacity="0.95" style="filter:drop-shadow(0 0 1.6px rgba(71,229,124,0.9))"/>
@@ -157,7 +157,7 @@ export function shipSilhouette(v: CandidateVessel, accent: string): string {
         k === "tanker" || k === "bulk" ? deck : "#234d63",
         accent
       )}
-      ${navLights(accent)}
+      ${navLights()}
     </svg>`;
 }
 

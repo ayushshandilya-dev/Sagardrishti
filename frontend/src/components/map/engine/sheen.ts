@@ -103,13 +103,12 @@ void main() {
   gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.95));
 }`;
 
-function compileShader(gl: WebGLRenderingContext, type: number, src: string): WebGLShader | null {
+function compileShader(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader | null {
   const sh = gl.createShader(type);
   if (!sh) return null;
   gl.shaderSource(sh, src);
   gl.compileShader(sh);
   if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-    // eslint-disable-next-line no-console
     console.warn("SD sheen shader failed:", gl.getShaderInfoLog(sh));
     gl.deleteShader(sh);
     return null;
@@ -117,7 +116,7 @@ function compileShader(gl: WebGLRenderingContext, type: number, src: string): We
   return sh;
 }
 
-function buildProgram(gl: WebGLRenderingContext): WebGLProgram | null {
+function buildProgram(gl: WebGL2RenderingContext): WebGLProgram | null {
   const vs = compileShader(gl, gl.VERTEX_SHADER, VERT_SRC);
   const fs = compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
   if (!vs || !fs) return null;
@@ -127,14 +126,13 @@ function buildProgram(gl: WebGLRenderingContext): WebGLProgram | null {
   gl.attachShader(prog, fs);
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-    // eslint-disable-next-line no-console
     console.warn("SD sheen program link failed:", gl.getProgramInfoLog(prog));
     return null;
   }
   return prog;
 }
 
-function compileBuffer(gl: WebGLRenderingContext, data: Float32Array): WebGLBuffer | null {
+function compileBuffer(gl: WebGL2RenderingContext, data: Float32Array): WebGLBuffer | null {
   const buf = gl.createBuffer();
   if (!buf) return null;
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -152,7 +150,7 @@ export interface SheenLayerHandle {
 export function createOilSheenLayer(
   id: string,
   ring: [number, number][]
-): { layer: any; handle: SheenLayerHandle } {
+): { layer: maplibregl.CustomLayerInterface; handle: SheenLayerHandle } {
   const n = Math.max(3, ring.length);
   /* polygon centroid (geographic) */
   let cx = 0;
@@ -219,11 +217,11 @@ export function createOilSheenLayer(
     },
   };
 
-  const layer = {
+  const layer: maplibregl.CustomLayerInterface = {
     id,
     type: "custom",
     renderingMode: "3d",
-    onAdd: (_map: any, gl: any) => {
+    onAdd: (_map: maplibregl.Map, gl: WebGL2RenderingContext) => {
       try {
         const p = buildProgram(gl);
         if (!p) throw new Error("no program");
@@ -244,12 +242,11 @@ export function createOilSheenLayer(
         uAlpha = gl.getUniformLocation(p, "uAlpha");
         vertexCount = count;
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("SD sheen layer init failed — using fallback tints.", err);
         broken = true;
       }
     },
-    render: (gl: any, args: any) => {
+    render: (gl: WebGL2RenderingContext, args: maplibregl.CustomRenderMethodInput) => {
       if (broken || !visible || alpha <= 0.002 || !program) return;
       gl.useProgram(program);
       gl.enableVertexAttribArray(aPos);
@@ -264,7 +261,7 @@ export function createOilSheenLayer(
       gl.bindBuffer(gl.ARRAY_BUFFER, bufCone);
       gl.vertexAttribPointer(aCone, 1, gl.FLOAT, false, 0, 0);
 
-      gl.uniformMatrix4fv(uMatrix, false, args.matrix);
+      gl.uniformMatrix4fv(uMatrix, false, args.modelViewProjectionMatrix);
       gl.uniform1f(uTime, performance.now() / 1000);
       gl.uniform1f(
         uAspect,
@@ -278,7 +275,7 @@ export function createOilSheenLayer(
 
       gl.drawArrays(gl.TRIANGLE_FAN, 0, vertexCount);
     },
-    onRemove: (_map: any, gl: any) => {
+    onRemove: (_map: maplibregl.Map, gl: WebGL2RenderingContext) => {
       if (bufPos) gl.deleteBuffer(bufPos);
       if (bufLon) gl.deleteBuffer(bufLon);
       if (bufCone) gl.deleteBuffer(bufCone);

@@ -8,7 +8,7 @@ import { CandidateVessel, Incident, DriftTrajectoryPoint } from "@/lib/types";
 import { LayerChips } from "./LayerChips";
 import { ZoomIn, ZoomOut, RotateCcw, ShieldCheck, Satellite } from "lucide-react";
 import { createOilSheenLayer } from "./engine";
-import { shipSilhouette, shipMetrics } from "./engine";
+import { shipSilhouette } from "./engine";
 import type { SheenLayerHandle } from "./engine";
 
 /* Compass bearing (degrees clockwise from north) between two lng/lat points */
@@ -1145,7 +1145,6 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
       sheenRef.current = created.handle;
       sheenRef.current.setAlpha(0.3);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn("SD: oil sheen engine unavailable, using tint only.", err);
     }
 
@@ -1270,10 +1269,10 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
       map.on(evt, "ports-dot", (e) => {
         const feat = e.features?.[0];
         if (!feat) return;
-        const props = feat.properties as any;
-        const name = props?.name ?? "PORT";
-        const throughput = props?.throughput ?? "—";
-        const vessels = props?.vessels ?? "—";
+        const props = feat.properties ?? {};
+        const name = String(props.name ?? "PORT");
+        const throughput = String(props.throughput ?? "—");
+        const vessels = String(props.vessels ?? "—");
         const el = document.createElement("div");
         el.className =
           "pointer-events-none rounded-md bg-bg-1/95 px-2.5 py-1.5 font-mono text-[10px] text-ink ring-1 ring-line shadow-float";
@@ -1291,7 +1290,11 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
           closeOnClick: false,
           className: "sd-port-popup",
         })
-          .setLngLat((feat.geometry as any).coordinates)
+          .setLngLat(
+            feat.geometry && feat.geometry.type === "Point"
+              ? (feat.geometry.coordinates as [number, number])
+              : [0, 0]
+          )
           .setDOMContent(el)
           .addTo(map);
         const clear = () => {
@@ -1364,10 +1367,13 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
 
     mapRef.current = map;
 
+    const markers = markersRef.current;
+    const markersByImo = markersByImoRef.current;
+
     return () => {
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
-      markersByImoRef.current.clear();
+      markers.forEach((m) => m.remove());
+      markers.length = 0;
+      markersByImo.clear();
       map.remove();
       mapRef.current = null;
     };
@@ -1613,40 +1619,35 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
     let t = 0;
+
+    const sway = (
+      sourceId: string,
+      base: number,
+      speed: number,
+      amp: number
+    ) => {
+      const src = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+      if (!src) return;
+      const raw = (src as unknown as { _data?: GeoJSON.FeatureCollection })._data;
+      const feats = raw?.features;
+      if (!feats || feats.length === 0) return;
+      src.setData({
+        type: "FeatureCollection",
+        features: feats.map((f, idx) => ({
+          ...f,
+          properties: {
+            ...f.properties,
+            bearing: Number(f.properties?.bearing ?? base) + Math.sin(t / speed + idx * 0.8) * amp,
+          },
+        })),
+      });
+    };
+
     const i = setInterval(() => {
       if (document.hidden) return;
       t += 1;
-      const wind = map.getSource("wind-points") as maplibregl.GeoJSONSource | undefined;
-      if (wind) {
-        const fc = (wind as any)._data ?? useCommandStore.getState().layers.weather;
-        if (fc) {
-          const data = (wind as any)._data;
-          if (data && data.features) {
-            const feats = (data.features as any[]).map((f, idx) => ({
-              ...f,
-              properties: {
-                ...f.properties,
-                bearing: (f.properties?.base ?? 59) + Math.sin(t / 1.4 + idx * 0.8) * 5,
-              },
-            }));
-            wind.setData({ type: "FeatureCollection", features: feats });
-          }
-        }
-      }
-      const cur = map.getSource("current-points") as maplibregl.GeoJSONSource | undefined;
-      if (cur) {
-        const data = (cur as any)._data;
-        if (data && data.features) {
-          const feats = (data.features as any[]).map((f, idx) => ({
-            ...f,
-            properties: {
-              ...f.properties,
-              bearing: (f.properties?.bearing ?? 119) + Math.sin(t / 1.1 + idx * 0.5) * 4,
-            },
-          }));
-          cur.setData({ type: "FeatureCollection", features: feats });
-        }
-      }
+      sway("wind-points", 59, 1.4, 5);
+      sway("current-points", 119, 1.1, 4);
     }, 1500);
     return () => clearInterval(i);
   }, [mapLoaded]);
@@ -1899,7 +1900,6 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
         map.setLayoutProperty(tl, "visibility", "none");
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoStep, isDemoRunning, hasVerified, mapLoaded, propVessels]);
 
   /* ── STAGE-2 SENTINEL DETECTION TIMELINE ───────────────────── */
@@ -2131,6 +2131,9 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     const map = mapRef.current;
     if (!map || !mapLoaded || !map.getSource("graticule")) return;
 
+    const markers = markersRef.current;
+    const markersByImo = markersByImoRef.current;
+
     const build = () => {
       const s = useCommandStore.getState();
       const list = propVessels ?? s.candidateVessels;
@@ -2138,9 +2141,9 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
       const onSel = onSelectVesselRef.current;
 
       /* drop previous markers and their trail/proj layers */
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
-      markersByImoRef.current.clear();
+      markers.forEach((m) => m.remove());
+      markers.length = 0;
+      markersByImo.clear();
       list.forEach((v) => {
         [`trail-${v.imo}`, `trail-dots-${v.imo}`, `proj-${v.imo}`, `gap-${v.imo}`].forEach((id) => {
           if (map.getLayer(id)) map.removeLayer(id);
@@ -2214,7 +2217,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
           const marker = new maplibregl.Marker({ element: el })
             .setLngLat([cx, cy])
             .addTo(map);
-          markersRef.current.push(marker);
+          markers.push(marker);
         });
         return;
       }
@@ -2349,7 +2352,6 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
               ? "#22D3A7"
               : "#38BDF8";
         const dimmed = selImo && !isSelected ? "opacity-40" : "";
-        const mtr = shipMetrics(v);
 
         el.className = `group cursor-pointer select-none ${dimmed}`;
         const wakeLen = 20 + Math.min(30, v.speedOverGround * 2);
@@ -2401,8 +2403,8 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
         const marker = new maplibregl.Marker({ element: el })
           .setLngLat([v.longitude, v.latitude])
           .addTo(map);
-        markersRef.current.push(marker);
-        markersByImoRef.current.set(v.imo, marker);
+        markers.push(marker);
+        markersByImo.set(v.imo, marker);
       });
     };
 
@@ -2423,9 +2425,9 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     return () => {
       unsub();
       map.off("zoomend", build);
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
-      markersByImoRef.current.clear();
+      markers.forEach((m) => m.remove());
+      markers.length = 0;
+      markersByImo.clear();
       const s = useCommandStore.getState();
       (propVessels ?? s.candidateVessels).forEach((v) => {
         [`trail-${v.imo}`, `trail-dots-${v.imo}`, `proj-${v.imo}`, `gap-${v.imo}`].forEach((id) => {
@@ -2507,7 +2509,6 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
       map.off("zoom", sync);
       map.off("move", sync);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incident, mapLoaded, layers.oil]);
 
   /* ── CINEMATIC FLY-TO ON INCIDENT SELECTION ────────────────── */
