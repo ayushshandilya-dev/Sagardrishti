@@ -12,6 +12,9 @@ const CHIPS: { key: keyof MapLayersState; label: string; color: string }[] = [
   { key: "weather", label: "Weather", color: "#22D3A7" },
   { key: "currents", label: "Currents", color: "#38BDF8" },
   { key: "shipping", label: "Shipping", color: "#22D3A7" },
+  { key: "bathy", label: "Bathymetry", color: "#2CBFCC" },
+  { key: "coast", label: "Coastline", color: "#8ECEB1" },
+  { key: "sentinel", label: "Sentinel", color: "#7DD3FC" },
 ];
 
 export const LayerChips: React.FC = () => {
