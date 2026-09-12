@@ -1339,7 +1339,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
               "raster-saturation": -0.15,
               "raster-contrast": 0.18,
               "raster-brightness-min": 0.72,
-              "raster-brightness-max": 1.05,
+              "raster-brightness-max": 1,
               "raster-fade-duration": 200,
             },
           },
