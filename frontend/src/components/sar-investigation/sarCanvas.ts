@@ -17,7 +17,9 @@ export type SarBand =
   | "VV"
   | "VH"
   | "SEGMENTATION"
-  | "FINAL MASK";
+  | "FINAL MASK"
+  | "CONFIDENCE"
+  | "TEXTURE";
 
 export const BANDS: SarBand[] = [
   "RAW",
@@ -27,6 +29,8 @@ export const BANDS: SarBand[] = [
   "VH",
   "SEGMENTATION",
   "FINAL MASK",
+  "CONFIDENCE",
+  "TEXTURE",
 ];
 
 export function hashSeed(s: string): number {
