@@ -1,0 +1,132 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+@theme inline {
+  --color-bg-0: var(--bg-0);
+  --color-bg-1: var(--bg-1);
+  --color-bg-2: var(--bg-2);
+  --color-panel: var(--panel);
+  --color-panel-hover: var(--panel-hover);
+
+  --color-line: var(--line);
+  --color-line-active: var(--line-active);
+
+  --color-ink: var(--ink);
+  --color-ink-dim: var(--ink-dim);
+  --color-ink-faint: var(--ink-faint);
+
+  --color-aqua: var(--aqua);
+  --color-teal: var(--teal);
+  --color-amber: var(--amber);
+  --color-red: var(--red);
+  --color-green: var(--green);
+  --color-orange: var(--orange);
+
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jbm);
+
+  --radius-panel: var(--radius-panel);
+  --radius-control: var(--radius-control);
+  --radius-chip: var(--radius-chip);
+
+  --shadow-panel: var(--shadow-panel);
+  --shadow-float: var(--shadow-float);
+}
+
+@layer base {
+  html,
+  body {
+    background-color: var(--bg-0);
+    color: var(--ink);
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    font-family: var(--font-inter);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  ::selection {
+    background: rgba(56, 189, 248, 0.28);
+    color: var(--ink);
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  input[type="range"] {
+    accent-color: var(--aqua);
+  }
+}
+
+@layer utilities {
+  /* Calm scientific surface primitives */
+  .panel {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .inset-panel {
+    background: var(--bg-0);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-inlay);
+  }
+
+  .hairline-b {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .hairline-t {
+    border-top: 1px solid var(--line);
+  }
+
+  /* Technical metadata text (mono, tabular, faint) */
+  .meta {
+    font-family: var(--font-jbm);
+    font-size: 10px;
+    letter-spacing: 0.02em;
+    color: var(--ink-dim);
+  }
+
+  .meta-label {
+    font-family: var(--font-jbm);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* Tabular figures for numeric readouts */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Soft focus ring */
+  .focus-ring:focus-visible {
+    outline: none;
+    border-color: var(--line-active);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.22);
+  }
+}
+
+/* ── MOTION PRIMITIVES ─────────────────────────────────────── */
+@keyframes drift-dash {
+  to { stroke-dashoffset: -20; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.28; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes ambient {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}

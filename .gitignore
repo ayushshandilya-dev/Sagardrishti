@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/coverage/
+npm-debug.log*
+
+# Misc
+*.log
+*.pdf

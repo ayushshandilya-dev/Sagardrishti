@@ -1,0 +1,81 @@
+# Ground rules: `docker compose up` runs ONLY the backend + dashboard.
+# The web console is Docker-optional; run it natively with `npm run dev`
+# (see README) unless you explicitly want the "full" profile.
+#
+#   docker compose up -d               # backend API + Streamlit dashboard
+#   docker compose --profile full up -d  # + web console on :3000
+
+services:
+  # API Gateway
+  api:
+    build: ./docker
+    command: ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./:/app:rw
+
+  # Streamlit Dashboard
+  dashboard:
+    build: ./docker
+    ports:
+      - "8501:8501"
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - api
+
+  # Web Console (optional — enable with --profile full)
+  frontend:
+    build: ./frontend
+    profiles: ["full"]
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+
+# Infrastructure services (commented for local demo)
+# postgres:
+#   image: postgis/postgis:16
+#   environment:
+#     POSTGRES_DB: sagar_drishti
+#     POSTGRES_USER: sagar_user
+#     POSTGRES_PASSWORD: changeme
+#   volumes:
+#     - pg_data:/var/lib/postgresql/data
+#   ports:
+#     - "5432:5432"
+#
+# redis:
+#   image: redis:7-alpine
+#   ports:
+#     - "6379:6379"
+#
+# minio:
+#   image: minio/minio:latest
+#   environment:
+#     MINIO_ROOT_USER: minioadmin
+#     MINIO_ROOT_PASSWORD: minioadmin
+#   command: minio/server/data --console-address localhost:9001
+#   ports:
+#     - "9000:9000"
+#     - "9001:9001"
+#
+# timescaledb:
+#   image: timescale/timescaledb:2-pg16
+#   environment:
+#     POSTGRES_DB: sagar_drishti
+#     POSTGRES_USER: sagar_user
+#     POSTGRES_PASSWORD: changeme
+#   volumes:
+#     - ts_data:/var/lib/postgresql/data
+
+volumes:
+  pg_data:
+  ts_data:
