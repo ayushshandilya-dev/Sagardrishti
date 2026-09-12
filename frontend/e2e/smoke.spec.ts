@@ -54,6 +54,7 @@ test.describe("console routes", () => {
 
 test.describe("demo mode", () => {
   test("DEMO MODE button starts and completes", async ({ page }) => {
+    test.setTimeout(150_000);
     const errors: string[] = [];
     page.on("console", (m) => {
       if (m.type() === "error") errors.push(m.text());
@@ -61,11 +62,18 @@ test.describe("demo mode", () => {
     page.on("pageerror", (e) => errors.push(e.message));
 
     await page.goto("/operations", { waitUntil: "domcontentloaded" });
+    // precompile the flagship route so the demo transition is instant in dev
+    await page.goto("/sar-investigation", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1_000);
+    await page.goto("/operations", { waitUntil: "domcontentloaded" });
     const button = page.getByRole("button", { name: /DEMO MODE|STAGE \d\/7/ });
     await expect(button.first()).toBeVisible();
     await page.waitForTimeout(3_000); // let React hydrate before clicking
     await button.first().click();
     await expect(page.getByRole("button", { name: /STAGE/ }).first()).toBeVisible();
+    await expect
+      .poll(async () => page.evaluate(() => location.pathname), { timeout: 25_000 })
+      .toContain("sar-investigation");
     await page.waitForTimeout(46_000);
     const stageBtn = page.getByRole("button", { name: /STAGE \d\/7/ }).first();
     const still = await stageBtn.isVisible().catch(() => false);
