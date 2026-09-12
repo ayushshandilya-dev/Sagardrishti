@@ -111,6 +111,8 @@ const TONE: Record<SarBand, Tone> = {
   VH: { sea: 42, land: 56, speckle: 30, slick: 78, gain: 1.6 },
   SEGMENTATION: { sea: 52, land: 66, speckle: 30, slick: 58, gain: 1.45 },
   "FINAL MASK": { sea: 52, land: 66, speckle: 30, slick: 58, gain: 1.45 },
+  CONFIDENCE: { sea: 82, land: 44, speckle: 0, slick: 55, gain: 1.35, dark: 1.0 },
+  TEXTURE: { sea: 55, land: 92, speckle: 70, slick: 34, gain: 1.5, dark: 1.0 },
 };
 
 /* Slick silhouette normalised to 0..1 (matches buildSlickPolygon at 1000x700). */
@@ -271,6 +273,59 @@ export function renderBand(
     }
   }
   ctx.putImageData(img, 0, 0);
+
+  /* ── CONFIDENCE · per-pixel probability heatmap over the slick ── */
+  if (mode === "CONFIDENCE") {
+    const cx = (bb.minX + bb.maxX) / 2;
+    const cy = (bb.minY + bb.maxY) / 2;
+    const maxR = Math.max(1, ((bb.maxX - bb.minX) + (bb.maxY - bb.minY)) / 2);
+    ctx.save();
+    ctx.beginPath();
+    slick.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+    ctx.closePath();
+    ctx.clip();
+    const heat = ctx.createRadialGradient(cx, cy, maxR * 0.08, cx, cy, maxR);
+    heat.addColorStop(0.0, "rgba(239, 68, 68, 0.9)"); // high certainty core
+    heat.addColorStop(0.35, "rgba(251, 146, 60, 0.85)");
+    heat.addColorStop(0.6, "rgba(250, 204, 21, 0.7)");
+    heat.addColorStop(0.82, "rgba(74, 222, 128, 0.55)");
+    heat.addColorStop(1.0, "rgba(96, 165, 250, 0.35)"); // fuzzy fringe
+    ctx.fillStyle = heat;
+    ctx.fillRect(0, 0, W, H);
+    // probabilistic fringe dithering
+    const fringeRng = mulberry32(seed ^ 0x51ed270b);
+    for (let i = 0; i < 900; i++) {
+      const fx = bb.minX + fringeRng() * (bb.maxX - bb.minX);
+      const fy = bb.minY + fringeRng() * (bb.maxY - bb.minY);
+      ctx.fillStyle = `rgba(96, 165, 250, ${0.04 + fringeRng() * 0.1})`;
+      ctx.fillRect(fx, fy, 0.8 + fringeRng() * 1.4, 1.5);
+    }
+    ctx.restore();
+    ctx.beginPath();
+    slick.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+    ctx.closePath();
+    ctx.strokeStyle = "rgba(239, 110, 90, 0.9)";
+    ctx.lineWidth = 0.8 + 1.4 * g;
+    ctx.stroke();
+  }
+
+  /* ── TEXTURE · GLCM-style second-order statistics in grayscale ── */
+  if (mode === "TEXTURE") {
+    ctx.save();
+    ctx.beginPath();
+    slick.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+    ctx.closePath();
+    ctx.clip();
+    const tex = mulberry32(seed ^ 0x7f4a7c15);
+    for (let i = 0; i < 2600; i++) {
+      const tx = bb.minX + tex() * (bb.maxX - bb.minX);
+      const ty = bb.minY + tex() * (bb.maxY - bb.minY);
+      const contrast = tex(); // GLCM contrast → shinier = brighter
+      ctx.fillStyle = `rgba(${170 + contrast * 70}, ${200 + contrast * 50}, 225, ${0.04 + contrast * 0.12})`;
+      ctx.fillRect(tx, ty, 1 + tex() * 2, 1 + tex() * 2);
+    }
+    ctx.restore();
+  }
 
   /* Segmentation blobs + outline */
   if (mode === "SEGMENTATION" || mode === "FINAL MASK") {
