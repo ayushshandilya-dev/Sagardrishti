@@ -22,7 +22,7 @@ It is wrapped in a working command center (React + MapLibre) that streams live f
 ## Why it wins a demo, not just a deck
 
 - **It runs.** Two commands (`python main.py api`, `npm run dev`) — the DATA LIVE chip flips green as the console hydrates from the live API. Kill the API and it degrades gracefully to cached scenes.
-- **It's testable.** 39 pytest cases (RK4 invariants, attribution scoring, evidence tamper-detection) + 12 Playwright browser checks, all green.
+- **It's testable.** 39 pytest cases (RK4 invariants, attribution scoring, evidence tamper-detection) + 13 Playwright browser checks, all green.
 - **It's forgery-proof.** Tamper with one block and the evidence page fails the chain. That's the whole legal argument, demonstrated live.
 - **It's extensible.** The sample scene is a drop-in for a real Copernicus CDSE feed; the heuristic slicer is a drop-in for a SegFormer/deep-learning checkpoint.
 
@@ -33,7 +33,7 @@ It is wrapped in a working command center (React + MapLibre) that streams live f
 | Attribution top-candidate confidence | 99.4 % (MT OCEAN PIONEER) |
 | Meaningful cell size at 150 m | RK4 step = 300 s, backtrack to 12 h |
 | Evidence chain | 5 blocks, PoW-backed, Ed25519-signed |
-| Test coverage | 39 Python + 12 browser tests, all green |
+| Test coverage | 39 Python + 13 browser tests, all green |
 
 ## Single next step for production
 

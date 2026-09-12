@@ -14,7 +14,7 @@ Sagar-Drishti is an end-to-end maritime domain awareness platform that:
 1. **Detects oil slicks** from Sentinel-1 C-Band SAR imagery — all-weather, all-dark capability under monsoon cloud cover and at night.
 2. **Filters look-alikes** (biogenic blooms, low-wind calms, ship wakes) using dual-pol backscatter and texture metrics.
 3. **Backtracks the discharge origin** with a 4th-order Runge–Kutta (RK4) Lagrangian advection engine driven by INCOIS surface currents and ECMWF winds — recovering `(x₀, y₀, t₀)`.
-4. **Attribures the spill to a vessel** by fusing AIS trajectories into a 5-factor Bayesian score: proximity, heading collinearity, vessel-type prior, kinematic (tank-washing) anomaly, and temporal causality.
+4. **Attributes the spill to a vessel** by fusing AIS trajectories into a 5-factor Bayesian score: proximity, heading collinearity, vessel-type prior, kinematic (tank-washing) anomaly, and temporal causality.
 5. **Produces tamper-evident, court-ready dossiers** sealed with SHA-256 Merkle trees and Ed25519 signatures — Section 65B (Indian Evidence Act, 1872) / Section 63 (Bharatiya Sakshya Adhiniyam, 2023) compliant, aligned with IMO MARPOL Annex I Regulation 15.
 
 The command console (`frontend/`) is a React + MapLibre GL command center that renders all of it live: satellite swath overlays, animated drift reconstruction, AIS traffic, ranking and an interactive evidence-ledger verifier.
@@ -25,35 +25,48 @@ The command console (`frontend/`) is a React + MapLibre GL command center that r
 
 ```
 .
-├── main.py                      # Entry point: `pipeline`, `api`, `test` commands
+├── main.py                      # Entry point: `pipeline`, `api`, `dashboard`, `test`
 ├── requirements.txt             # Full backend dependency manifest (heavy — see below)
-├── docker-compose.yml           # Optional Docker stack (backend + dashboard)
-├── architecture.md              # Master architecture & technical specification
+├── docker-compose.yml           # Optional Docker stack (backend + dashboard [+ console])
+├── docker/Dockerfile            # Backend image (python:3.11-slim + GDAL geospatial stack)
+├── Architecture.md              # Master architecture & technical specification
+├── PITCH.md                     # Two-minute elevator pitch
 │
 ├── api/
 │   ├── main.py                  # FastAPI app assembly + health + vessels + metocean
 │   └── routes/
-│       ├── incidents.py         # SAR scene catalog
-│       ├── drift.py             # RK4 reverse backtracking
+│       ├── incidents.py         # SAR scene catalog (/api/v1/incidents)
+│       ├── drift.py             # RK4 reverse backtracking (/api/v1/drift/backtrack)
 │       ├── attribution.py       # 5-factor Bayesian vessel scoring
 │       └── evidence.py          # Merkle ledger + verification sequence
 │
 ├── core/
+│   ├── sar/
+│   │   ├── detection.py         # SegFormer / DeepLabV3+ / U-Net segmentation detectors
+│   │   ├── preprocessing.py     # Radiometric calibration, Refined Lee speckle filter
+│   │   └── texture.py           # Haralick GLCM look-alike discriminator
+│   ├── ais/parser.py            # CSV/JSON AIS ingestion, trajectories, anomaly detection
 │   ├── drift/rk4.py             # 4th-order Runge–Kutta reverse advection
 │   ├── correlation/attribution.py  # Bayesian scoring + kinematic anomaly detection
-│   └── evidence/ledger.py       # SHA-256 Merkle chain, Ed25519 signing, PDF/A dossier
+│   ├── evidence/ledger.py       # SHA-256 Merkle chain, Ed25519 signing, PDF/A dossier
+│   └── metocean/fetchers.py     # INCOIS / ECMWF providers + bilinear interpolation
 │
 ├── data/
-│   └── sample_scenes.py         # Canonical scenes, AIS vessels, MetOcean snapshot
+│   └── sample_scenes.py         # Canonical scenes, AIS vessels, MetOcean snapshot, EEZ corridors
 │
-├── frontend/                    # Next.js command center (web console)
-│   ├── src/lib/api.ts           # Live API client with offline mock fallback
-│   ├── src/lib/bootstrap.ts     # Hydrates the store from the live backend
-│   └── src/app/                 # /operations /sar/[id] /drift /attribution
-│                                # /vessels/[imo] /evidence /dossier /settings
+├── dashboard/app.py             # Rapid Streamlit dashboard (4 pages)
 │
-├── dashboard/app.py             # Rapid Streamlit dashboard
-└── tests/                       # Pytest suite (attribution, drift, evidence)
+├── frontend/                    # Next.js 16 web console (React + MapLibre GL)
+│   ├── src/lib/                 # api.ts (live client), mockData.ts, store.ts, bootstrap.ts, types.ts
+│   ├── src/app/                 # /operations /sar/[id] /sar-investigation /drift /attribution
+│   │                            #  /vessels/[imo] /evidence /dossier /settings
+│   ├── src/components/          # shell, map, sar, sar-investigation, drift, attribution,
+│   │                            #  evidence, incident, vessels, kpi
+│   ├── e2e/smoke.spec.ts        # Playwright browser checks
+│   ├── Dockerfile               # Optional containerized console (--profile full)
+│   └── AGENTS.md / CLAUDE.md    # Dev-agent guides (AGENTS.md is re-added by `next dev`)
+│
+└── tests/                       # Pytest suite — attribution, drift, evidence (39 cases)
 ```
 
 ---
@@ -166,8 +179,8 @@ docker compose --profile full up -d # + web console on :3000
 ## How to Extend
 
 - **Live SAR ingestion**: replace `data/sample_scenes.py` with a Copernicus CDSE OData client; keep the scene JSON schema identical and the console consumes it unchanged.
-- **Deep learning segmenter**: drop a SegFormer/DeepLab checkpoint behind `core/models/` to replace the heuristic slick extraction.
-- **Live AIS**: swap the sample vessels for a decoded AIVDM stream (the attribution route already consumes per-vessel events).
+- **Deep learning segmenter**: drop a SegFormer/DeepLab checkpoint behind `core/sar/detection.py` (register it with `load_pretrained_model`) to replace the heuristic slicer.
+- **Live AIS**: swap the sample vessels for a decoded AIVDM stream (`core/ais/parser.py` already ingests CSV/JSON; the attribution route consumes per-vessel events).
 - **Scale-out**: the commented `postgres`/`redis`/`timescaledb`/`minio` services in `docker-compose.yml` are the intended multi-node path.
 
 ---
@@ -182,6 +195,6 @@ docker compose --profile full up -d # + web console on :3000
 
 ## Documentation
 
-- Master architecture: [`architecture.md`](architecture.md)
+- Master architecture: [`Architecture.md`](Architecture.md)
 - Console internals: `frontend/src/lib/bootstrap.ts`, `frontend/src/lib/api.ts`
 - Elevator pitch: [`PITCH.md`](PITCH.md)

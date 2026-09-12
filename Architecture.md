@@ -614,33 +614,39 @@ To guarantee operational readiness, the system is subjected to a dual-protocol b
 
 ```
 sagar-drishti/
-├── api/                        # FastAPI REST & WebSocket endpoints
-│   ├── routes/                 # Ingestion, detection, attribution, evidence endpoints
-│   └── main.py                 # API Gateway entrypoint
+├── main.py                     # Entry point — `pipeline`, `api`, `dashboard`, `test`
+├── api/                        # FastAPI REST & WebSocket endpoints (MVP)
+│   ├── main.py                 # App assembly + `/health`, `/api/v1/vessels`, `/api/v1/metocean`
+│   └── routes/                 # incidents, drift, attribution, evidence endpoints
 ├── core/
-│   ├── ingestion/              # Sentinel-1 OData client, AIS parser, MetOcean GRIB parser
-│   ├── preprocessing/          # Calibration, Refined Lee speckle filter, land mask, tiling
-│   ├── models/                 # SegFormer-B3, DeepLabV3+, Haralick texture extractor
-│   ├── drift/                  # RK4 Lagrangian backward/forward trajectory engine
-│   ├── correlation/            # Spatial R-Tree query, Bayesian multi-factor attribution
-│   └── evidence/               # SHA-256 Merkle tree, Ed25519 signer, PDF/A report generator
+│   ├── sar/                    # detection.py (SegFormer/DeepLabV3+/U-Net detectors),
+│   │                           # preprocessing.py (calibration/Refined Lee), texture.py (Haralick)
+│   ├── ais/                    # parser.py — AIVDM/CSV ingestion, trajectories, anomaly detection
+│   ├── drift/                  # rk4.py — RK4 Lagrangian backward/forward trajectory engine
+│   ├── correlation/            # attribution.py — Bayesian multi-factor scoring (5 factors)
+│   ├── evidence/               # ledger.py — SHA-256 Merkle chain, Ed25519 signer, PDF/A dossier
+│   └── metocean/               # fetchers.py — INCOIS currents + ECMWF winds, bilinear interpolation
 ├── data/
-│   ├── sample_scenes/          # Pre-cached Sentinel-1 Indian coastal scenes (MVP)
-│   ├── sample_ais/             # Replayed AIS tracks for demo validation
-│   └── metocean/               # Cached wind & surface current grids
-├── dashboard/                  # React + MapLibre GL frontend (or Streamlit interactive UI)
-│   ├── src/components/         # Spill map, trajectory slider, attribution cards
-│   └── public/
+│   └── sample_scenes.py        # Pre-cached SAR scenes, AIS vessels, MetOcean grids, EEZ corridors
+├── dashboard/                  # app.py — Streamlit interactive UI (4 pages)
+├── frontend/                   # Next.js 16 + MapLibre GL web console (primary UI)
+│   ├── src/lib/                # api.ts, bootstrap.ts, mockData.ts, store.ts, types.ts
+│   ├── src/app/                # /operations /sar/[id] /sar-investigation /drift /attribution
+│   │                           #  /vessels/[imo] /evidence /dossier /settings
+│   ├── src/components/         # shell, map, sar, sar-investigation, drift, attribution,
+│   │                           #  evidence, incident, vessels, kpi
+│   ├── e2e/smoke.spec.ts       # Playwright browser checks
+│   └── Dockerfile
 ├── docker/
-│   ├── Dockerfile.api
-│   ├── Dockerfile.worker
-│   └── docker-compose.yml      # One-command full-stack bootstrap
+│   ├── Dockerfile              # Backend image (python:3.11-slim + GDAL)
+│   └── docker-compose.yml      # One-command stack (api + dashboard; console via `full` profile)
 ├── tests/
-│   ├── test_preprocessing.py   # Radiometric calibration & speckle filter unit tests
-│   ├── test_drift_rk4.py       # Lagrangian backtracking accuracy tests
-│   └── test_attribution.py    # Multi-vessel disambiguation scoring tests
-├── docs/
-│   ├── architecture.md         # This master architecture specification
-│   └── sih26143_deck.md        # Presentation pitch deck & judging rubric alignment
-└── run_demo.py                 # Single-command offline demonstration script
+│   ├── test_drift.py           # Lagrangian backtracking accuracy tests
+│   ├── test_attribution.py     # Multi-vessel disambiguation scoring tests
+│   └── test_evidence.py        # Merkle ledger + tamper-detection tests
+├── Architecture.md             # This master architecture specification
+├── PITCH.md                    # Elevator pitch deck
+└── README.md                   # Quickstart, API surface, extension guide
 ```
+
+> The MVP ships the heuristic SAR slicer (implemented in `core/sar`), the RK4 drift engine, the 5-factor Bayesian attribution model, and the signed evidence ledger end-to-end. The deep-learning segmentation models, streaming ingestion, GRIB decoding, and storage tier are stubbed behind the same interfaces and enabled in the enterprise rollout (§14).
