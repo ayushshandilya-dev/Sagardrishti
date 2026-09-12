@@ -213,6 +213,9 @@ export interface MapLayersState {
   drift: boolean;
   weather: boolean;
   currents: boolean;
+  bathy: boolean;
+  coast: boolean;
+  sentinel: boolean;
 }
 
 export interface SatPass {
