@@ -1,6 +1,6 @@
 import { test, expect, Page } from "@playwright/test";
 
-const ROUTES = ["/operations", "/drift", "/attribution", "/evidence", "/dossier", "/settings"];
+const ROUTES = ["/operations", "/drift", "/attribution", "/evidence", "/dossier", "/settings", "/sar-investigation"];
 const API = process.env.PLAYWRIGHT_API_URL || "http://localhost:8000";
 
 async function assertPageHealthy(page: Page, route: string) {

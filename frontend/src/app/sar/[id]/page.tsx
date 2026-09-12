@@ -12,7 +12,7 @@ import {
   EvidenceChips,
   DetectorScores,
 } from "@/components/sar/SarPanels";
-import { Wind, FileDown, ArrowLeft } from "lucide-react";
+import { Wind, FileDown, ArrowLeft, ScanLine } from "lucide-react";
 
 export default function SarInvestigationPage({
   params,
@@ -53,6 +53,13 @@ export default function SarInvestigationPage({
             <FileDown className="h-3.5 w-3.5" />
             Generate evidence snapshot
           </button>
+          <Link
+            href="/sar-investigation"
+            className="flex items-center gap-1.5 rounded-md bg-amber/10 px-3 py-1.5 text-xs font-semibold text-amber ring-1 ring-amber/30 transition-colors duration-150 hover:bg-amber/15 focus-ring"
+          >
+            <ScanLine className="h-3.5 w-3.5" />
+            Open SAR investigation
+          </Link>
           <Link
             href="/drift"
             className="flex items-center gap-1.5 rounded-md bg-bg-2 px-3 py-1.5 text-xs font-semibold text-aqua ring-1 ring-aqua/30 transition-colors duration-150 hover:bg-panel-hover focus-ring"
