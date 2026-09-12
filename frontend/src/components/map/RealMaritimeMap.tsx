@@ -6,7 +6,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useCommandStore } from "@/lib/store";
 import { CandidateVessel, Incident, DriftTrajectoryPoint } from "@/lib/types";
 import { LayerChips } from "./LayerChips";
-import { ZoomIn, ZoomOut, RotateCcw, ShieldCheck } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, ShieldCheck, Satellite } from "lucide-react";
+import { createOilSheenLayer } from "./engine";
+import { shipSilhouette, shipMetrics } from "./engine";
+import type { SheenLayerHandle } from "./engine";
 
 /* Compass bearing (degrees clockwise from north) between two lng/lat points */
 function bearingDeg(a: [number, number], b: [number, number]): number {
@@ -65,41 +68,6 @@ function revealSwath(map: maplibregl.Map, reduced: boolean) {
   return () => cancelAnimationFrame(raf);
 }
 
-/* Top-view vessel silhouettes — tanker / cargo / fishing */
-function shipGlyph(v: CandidateVessel) {
-  const t = (v.vesselType ?? "").toLowerCase();
-  const isTanker = /tanker|crude|product/.test(t);
-  const isFishing = /fish|trawl/.test(t);
-  if (isTanker) {
-    return `
-      <svg width="22" height="22" viewBox="0 0 24 24">
-        <rect x="6.6" y="2.6" width="10.8" height="18.8" rx="5.4" fill="currentColor"/>
-        <rect x="6.6" y="2.6" width="10.8" height="18.8" rx="5.4" fill="#050B11" opacity="0.32"/>
-        <rect x="8.6" y="7.4" width="6.8" height="4.8" rx="1.1" fill="#0A1520"/>
-        <circle cx="12" cy="15.4" r="2.5" fill="#0A1520"/>
-        <circle cx="12" cy="15.4" r="1.25" fill="#EF4444"/>
-      </svg>`;
-  }
-  if (isFishing) {
-    return `
-      <svg width="22" height="22" viewBox="0 0 24 24">
-        <rect x="7.4" y="4" width="9.2" height="16" rx="4.6" fill="currentColor"/>
-        <rect x="10.3" y="8.6" width="3.4" height="5.2" rx="0.8" fill="#0A1520"/>
-        <line x1="12" y1="9" x2="3.6" y2="2.4" stroke="currentColor" stroke-width="1"/>
-      </svg>`;
-  }
-  return `
-    <svg width="22" height="22" viewBox="0 0 24 24">
-      <rect x="6.6" y="2.6" width="10.8" height="18.8" rx="5.4" fill="currentColor"/>
-      <rect x="6.6" y="2.6" width="10.8" height="18.8" rx="5.4" fill="#050B11" opacity="0.32"/>
-      <rect x="8.2" y="13.8" width="3.2" height="3.4" rx="0.5" fill="#0A1520"/>
-      <rect x="11.7" y="13.8" width="3.2" height="3.4" rx="0.5" fill="#0A1520"/>
-      <rect x="8.2" y="9.2" width="3.2" height="3.4" rx="0.5" fill="#0A1520"/>
-      <rect x="11.7" y="9.2" width="3.2" height="3.4" rx="0.5" fill="#0A1520"/>
-      <rect x="9.9" y="6.4" width="4.2" height="2.7" rx="0.9" fill="#0A1520"/>
-    </svg>`;
-}
-
 /* Mission alert copy for each demo stage */
 const STAGE_ALERTS: Record<number, string> = {
   1: "SENTINEL-1A PASS INGESTED",
@@ -122,6 +90,11 @@ const ANALYST_LINES: Record<number, string> = {
   7: "Ledger sealed — SHA-256 Merkle root committed, ED25519 signed.",
 };
 
+/* Cursor arrow direction icon */
+function bearingArrowIcon(color: string): ImageData {
+  return arrowIcon(color, 5);
+}
+
 export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
   incident: propIncident,
   candidateVessels: propVessels,
@@ -135,11 +108,13 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
   const particlesRef = useRef<HTMLCanvasElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const markersByImoRef = useRef<Map<number, maplibregl.Marker>>(new Map());
   const satRef = useRef<maplibregl.Marker | null>(null);
   const haloRef = useRef<maplibregl.Marker | null>(null);
   const onSelectVesselRef = useRef(onSelectVessel);
   const driftLineRef = useRef<DriftTrajectoryPoint[]>([]);
   const prevDemoStepRef = useRef(0);
+  const sheenRef = useRef<SheenLayerHandle | null>(null);
 
   const store = useCommandStore();
   const incident = propIncident ?? store.getSelectedIncident();
@@ -152,6 +127,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
 
   const [mapLoaded, setMapLoaded] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
+  const [clockUtc, setClockUtc] = useState("");
   const [readout, setReadout] = useState<{ lat: number; lng: number; z: number }>({
     lat: 21.845,
     lng: 69.112,
@@ -171,16 +147,27 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     driftLineRef.current = driftLine;
   }, [driftLine]);
 
-  /* ── ADD STATIC GEOJSON LAYERS ─────────────────────────────── */
-function addBaseLayers(map: maplibregl.Map) {
+  /* Mission clock — live UTC readout for the telemetry HUD */
+  useEffect(() => {
+    const tick = () => setClockUtc(new Date().toISOString().slice(11, 19) + "Z");
+    tick();
+    const i = setInterval(tick, 1000);
+    return () => clearInterval(i);
+  }, []);
+
+  /* ═══════════════════════════════════════════════════════════
+     BASE GEO LAYERS
+     ═══════════════════════════════════════════════════════════ */
+  function addBaseLayers(map: maplibregl.Map) {
     const inc = incident;
 
-    /* Vector arrow icons (wind / current / orbit) — register first */
+    /* Vector arrow icons */
     if (!map.hasImage("arrow-wind")) map.addImage("arrow-wind", arrowIcon("#22D3A7", 4));
     if (!map.hasImage("arrow-current")) map.addImage("arrow-current", arrowIcon("#38BDF8", 5));
     if (!map.hasImage("arrow-sat")) map.addImage("arrow-sat", arrowIcon("#7DD3FC", 6));
+    if (!map.hasImage("arrow-lane")) map.addImage("arrow-lane", bearingArrowIcon("#A7F3E0"));
 
-    /* Graticule — lat/lon grid so the ocean never reads as a void */
+    /* Graticule */
     const lonLines: [number, number][][] = [];
     const latLines: [number, number][][] = [];
     for (let lon = 66.2; lon <= 71.2; lon += 0.5) {
@@ -211,7 +198,7 @@ function addBaseLayers(map: maplibregl.Map) {
       },
     });
 
-    /* Sentinel-1 swath footprint — acquisition coverage band */
+    /* ── SENTINEL-1 SWATH ────────────────────────────────────── */
     if (inc) {
       const m = inc.sarMetadata;
       const slant = m.passDirection === "ASCENDING" ? 1 : -1;
@@ -243,10 +230,7 @@ function addBaseLayers(map: maplibregl.Map) {
         id: "swath-fill",
         type: "fill",
         source: "sentinel-swath",
-        paint: {
-          "fill-color": "#38BDF8",
-          "fill-opacity": 0,
-        },
+        paint: { "fill-color": "#38BDF8", "fill-opacity": 0 },
       });
       map.addLayer({
         id: "swath-outline",
@@ -313,484 +297,922 @@ function addBaseLayers(map: maplibregl.Map) {
       });
     }
 
-    /* Bathymetry depth contours — coastal shallows closer to land (legible over imagery) */
-      map.addSource("bathy", {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: [
-            { type: "Feature", properties: { depth: -1000 }, geometry: { type: "LineString", coordinates: [[65.8, 24.0], [67.0, 22.8], [68.3, 21.8], [69.8, 20.9], [71.0, 20.1]] } },
-            { type: "Feature", properties: { depth: -200 }, geometry: { type: "LineString", coordinates: [[66.2, 23.4], [67.6, 22.2], [68.9, 21.3], [70.4, 20.5]] } },
-            { type: "Feature", properties: { depth: -100 }, geometry: { type: "LineString", coordinates: [[66.8, 23.5], [67.9, 22.5], [69.2, 21.7], [70.7, 20.9]] } },
-            { type: "Feature", properties: { depth: -50 }, geometry: { type: "LineString", coordinates: [[67.5, 23.6], [68.6, 22.7], [69.8, 22.0], [71.0, 21.3]] } },
-          ],
-        },
-      });
-      map.addLayer({
-        id: "bathy-lines",
-        type: "line",
-        source: "bathy",
-        paint: {
-          "line-color": "#39A8D8",
-          "line-width": ["interpolate", ["linear"], ["get", "depth"], -1000, 0.5, -50, 1.4],
-          "line-opacity": ["interpolate", ["linear"], ["get", "depth"], -1000, 0.22, -50, 0.6],
-        },
-      });
-      map.addSource("bathy-label-pts", {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: [
-            { type: "Feature", properties: { depth: -1000 }, geometry: { type: "Point", coordinates: [68.85, 21.55] } },
-            { type: "Feature", properties: { depth: -200 }, geometry: { type: "Point", coordinates: [68.7, 21.85] } },
-            { type: "Feature", properties: { depth: -100 }, geometry: { type: "Point", coordinates: [68.95, 22.2] } },
-            { type: "Feature", properties: { depth: -50 }, geometry: { type: "Point", coordinates: [69.35, 22.5] } },
-          ],
-        },
-      });
-      map.addLayer({
-        id: "bathy-labels",
-        type: "symbol",
-        source: "bathy-label-pts",
-        layout: {
-          "text-field": ["concat", ["to-string", ["get", "depth"]], " m"],
-          "text-size": 8,
-          "text-font": ["Open Sans Regular"],
-          "text-letter-spacing": 0.06,
-          "text-anchor": "left",
-          "text-offset": [0.5, 0],
-        },
-        paint: { "text-color": "#69C2E8", "text-halo-color": "#04121F", "text-halo-width": 1.3 },
-      });
+    /* ── BATHYMETRY CONTOURS + DEPTH SHADER ──────────────────── */
+    const c1000: [number, number][] = [[65.8, 24.0], [67.0, 22.8], [68.3, 21.8], [69.8, 20.9], [71.0, 20.1]];
+    const c200: [number, number][] = [[66.2, 23.4], [67.6, 22.2], [68.9, 21.3], [70.4, 20.5]];
+    const c100: [number, number][] = [[66.8, 23.5], [67.9, 22.5], [69.2, 21.7], [70.7, 20.9]];
+    const c50: [number, number][] = [[67.5, 23.6], [68.6, 22.7], [69.8, 22.0], [71.0, 21.3]];
 
-      /* Bathymetry shader — translucent depth bands between contours (ocean depth tint) */
-      const c1000 = [[65.8, 24.0], [67.0, 22.8], [68.3, 21.8], [69.8, 20.9], [71.0, 20.1]] as [number, number][];
-      const c200 = [[66.2, 23.4], [67.6, 22.2], [68.9, 21.3], [70.4, 20.5]] as [number, number][];
-      const c100 = [[66.8, 23.5], [67.9, 22.5], [69.2, 21.7], [70.7, 20.9]] as [number, number][];
-      const c50 = [[67.5, 23.6], [68.6, 22.7], [69.8, 22.0], [71.0, 21.3]] as [number, number][];
-      const band = (a: [number, number][], b: [number, number][]): [number, number][] => [...a, ...[...b].reverse(), a[0]];
-      map.addSource("depth-bands", {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: [
-            { type: "Feature", properties: { band: "deep" }, geometry: { type: "Polygon", coordinates: [band(c1000, c200)] } },
-            { type: "Feature", properties: { band: "mid" }, geometry: { type: "Polygon", coordinates: [band(c200, c100)] } },
-            { type: "Feature", properties: { band: "shelf" }, geometry: { type: "Polygon", coordinates: [band(c100, c50)] } },
-          ],
-        },
-      });
-      map.addLayer({
-        id: "depth-deep",
-        type: "fill",
-        source: "depth-bands",
-        filter: ["==", ["get", "band"], "deep"],
-        paint: { "fill-color": "#0E2A40", "fill-opacity": 0.18 },
-      });
-      map.addLayer({
-        id: "depth-mid",
-        type: "fill",
-        source: "depth-bands",
-        filter: ["==", ["get", "band"], "mid"],
-        paint: { "fill-color": "#13445F", "fill-opacity": 0.16 },
-      });
-      map.addLayer({
-        id: "depth-shelf",
-        type: "fill",
-        source: "depth-bands",
-        filter: ["==", ["get", "band"], "shelf"],
-        paint: { "fill-color": "#1C5578", "fill-opacity": 0.14 },
-      });
+    map.addSource("bathy", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: { depth: -1000 }, geometry: { type: "LineString", coordinates: c1000 } },
+          { type: "Feature", properties: { depth: -200 }, geometry: { type: "LineString", coordinates: c200 } },
+          { type: "Feature", properties: { depth: -100 }, geometry: { type: "LineString", coordinates: c100 } },
+          { type: "Feature", properties: { depth: -50 }, geometry: { type: "LineString", coordinates: c50 } },
+        ],
+      },
+    });
+    map.addLayer({
+      id: "bathy-lines",
+      type: "line",
+      source: "bathy",
+      paint: {
+        "line-color": "#39A8D8",
+        "line-width": ["interpolate", ["linear"], ["get", "depth"], -1000, 0.5, -50, 1.4],
+        "line-opacity": ["interpolate", ["linear"], ["get", "depth"], -1000, 0.22, -50, 0.6],
+      },
+    });
+    map.addSource("bathy-label-pts", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: { depth: -1000 }, geometry: { type: "Point", coordinates: [68.85, 21.55] } },
+          { type: "Feature", properties: { depth: -200 }, geometry: { type: "Point", coordinates: [68.7, 21.85] } },
+          { type: "Feature", properties: { depth: -100 }, geometry: { type: "Point", coordinates: [68.95, 22.2] } },
+          { type: "Feature", properties: { depth: -50 }, geometry: { type: "Point", coordinates: [69.35, 22.5] } },
+        ],
+      },
+    });
+    map.addLayer({
+      id: "bathy-labels",
+      type: "symbol",
+      source: "bathy-label-pts",
+      layout: {
+        "text-field": ["concat", ["to-string", ["get", "depth"]], " m"],
+        "text-size": 8,
+        "text-font": ["Open Sans Regular"],
+        "text-letter-spacing": 0.06,
+        "text-anchor": "left",
+        "text-offset": [0.5, 0],
+      },
+      paint: { "text-color": "#69C2E8", "text-halo-color": "#04121F", "text-halo-width": 1.3 },
+    });
 
-      /* Indian EEZ boundary — soft glow underlay + thin dashed line + label */
-      const eez: [number, number][] = [
-        [66.6, 23.9], [67.05, 22.9], [67.35, 21.7], [67.7, 20.2], [68.15, 18.6], [68.9, 17.1], [70.3, 15.0],
-      ];
-      map.addSource("eez", {
-        type: "geojson",
-        data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: eez } },
-      });
-      map.addLayer({
-        id: "eez-glow",
-        type: "line",
-        source: "eez",
-        paint: { "line-color": "#38BDF8", "line-width": 7, "line-blur": 6, "line-opacity": 0.14 },
-      });
-      map.addLayer({
-        id: "eez-line",
-        type: "line",
-        source: "eez",
-        paint: {
-          "line-color": "#38BDF8",
-          "line-width": 1.2,
-          "line-dasharray": [4, 3],
-          "line-opacity": 0.55,
-        },
-      });
-      map.addSource("eez-label-pt", {
-        type: "geojson",
-        data: {
+    /* depth shading between contours — translucent layered gradients */
+    const band = (a: [number, number][], b: [number, number][]): [number, number][] => [...a, ...[...b].reverse(), a[0]];
+    map.addSource("depth-bands", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: { band: "deep" }, geometry: { type: "Polygon", coordinates: [band(c1000, c200)] } },
+          { type: "Feature", properties: { band: "mid" }, geometry: { type: "Polygon", coordinates: [band(c200, c100)] } },
+          { type: "Feature", properties: { band: "shelf" }, geometry: { type: "Polygon", coordinates: [band(c100, c50)] } },
+        ],
+      },
+    });
+    map.addLayer({
+      id: "depth-deep",
+      type: "fill",
+      source: "depth-bands",
+      filter: ["==", ["get", "band"], "deep"],
+      paint: {
+        "fill-color": "#062038",
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.3, 8, 0.1],
+      },
+    });
+    map.addLayer({
+      id: "depth-mid",
+      type: "fill",
+      source: "depth-bands",
+      filter: ["==", ["get", "band"], "mid"],
+      paint: {
+        "fill-color": "#0C3A58",
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.22, 8, 0.08],
+      },
+    });
+    map.addLayer({
+      id: "depth-shelf",
+      type: "fill",
+      source: "depth-bands",
+      filter: ["==", ["get", "band"], "shelf"],
+      paint: {
+        "fill-color": "#124866",
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 5.5, 0.2, 8, 0.07],
+      },
+    });
+    /* continental shelf rim — the "shelf glow" edge */
+    map.addSource("shelf-rim", {
+      type: "geojson",
+      data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: c200 } },
+    });
+    map.addLayer({
+      id: "shelf-rim",
+      type: "line",
+      source: "shelf-rim",
+      paint: { "line-color": "#2CBFCC", "line-width": 6, "line-blur": 5, "line-opacity": 0.16 },
+    });
+
+    /* ── COASTLINE ENHANCEMENT ───────────────────────────────── */
+    const shoreN: [number, number][] = [
+      [68.25, 23.18], [68.7, 23.32], [69.15, 23.25], [69.6, 23.12],
+      [69.95, 23.05], [70.22, 23.03], [70.55, 23.05], [70.95, 23.02],
+    ];
+    const shoreS: [number, number][] = [
+      [68.3, 22.12], [68.75, 22.38], [69.07, 22.45], [69.35, 22.5],
+      [69.62, 22.56], [69.73, 22.84], [69.95, 22.86],
+    ];
+    const tideBand: [number, number][] = [
+      [69.2, 22.6], [69.5, 22.75], [69.8, 22.9], [69.9, 23.0],
+    ];
+    map.addSource("coast", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: { side: "n" }, geometry: { type: "LineString", coordinates: shoreN } },
+          { type: "Feature", properties: { side: "s" }, geometry: { type: "LineString", coordinates: shoreS } },
+          { type: "Feature", properties: { side: "tidal" }, geometry: { type: "LineString", coordinates: tideBand } },
+        ],
+      },
+    });
+    map.addLayer({
+      id: "coast-glow",
+      type: "line",
+      source: "coast",
+      paint: {
+        "line-color": [
+          "match",
+          ["get", "side"],
+          "n", "#9BE3E0",
+          "s", "#8ECEB1",
+          "#A5D8C9",
+        ],
+        "line-width": 5,
+        "line-blur": 4,
+        "line-opacity": 0.3,
+      },
+    });
+    map.addLayer({
+      id: "coast-line",
+      type: "line",
+      source: "coast",
+      paint: {
+        "line-color": "#7FC7C4",
+        "line-width": 0.9,
+        "line-opacity": 0.55,
+      },
+    });
+    /* estuarine sediment — turbid amber plumes at river mouths */
+    const sediment: [number, number][][] = [
+      [[69.6, 22.72], [69.98, 22.92], [69.9, 22.87], [69.55, 22.7]],
+      [[70.08, 22.97], [70.32, 23.07], [70.34, 23.03], [70.1, 22.94]],
+      [[68.98, 22.38], [69.1, 22.47], [69.08, 22.43], [68.96, 22.36]],
+      [[69.5, 22.44], [69.72, 22.52], [69.7, 22.5], [69.48, 22.42]],
+    ];
+    map.addSource("sediment", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: sediment.map((ring) => ({
           type: "Feature",
-          properties: {},
-          geometry: { type: "Point", coordinates: [67.28, 22.3] },
-        },
-      });
-      map.addLayer({
-        id: "eez-label",
-        type: "symbol",
-        source: "eez-label-pt",
-        layout: {
-          "text-field": "INDIAN EEZ",
-          "text-size": 9,
-          "text-font": ["Open Sans Semibold"],
-          "text-letter-spacing": 0.18,
-          "text-anchor": "left",
-          "text-offset": [0.8, 0],
-          "text-rotation-alignment": "map",
-        },
-        paint: { "text-color": "#4FA9D6", "text-halo-color": "#04121F", "text-halo-width": 1.4 },
-      });
+          properties: { tier: "silt" },
+          geometry: { type: "Polygon", coordinates: [[...ring, ring[0]]] },
+        })),
+      },
+    });
+    map.addLayer({
+      id: "coast-sediment",
+      type: "fill",
+      source: "sediment",
+      minzoom: 5.5,
+      paint: {
+        "fill-color": "#C79A55",
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 5.5, 0.05, 8.5, 0.14],
+      },
+    });
+    /* salt marsh texture — very fine dashed ticks along the tidal band */
+    map.addLayer({
+      id: "coast-tidal",
+      type: "line",
+      source: "coast",
+      filter: ["==", ["get", "side"], "tidal"],
+      paint: {
+        "line-color": "#5FA88F",
+        "line-width": 1.1,
+        "line-dasharray": [0.8, 1.6],
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0, 9, 0.5],
+      },
+    });
 
-      /* Shipping lane corridors — glow underlay + direction dashes */
-      const lanes: [number, number][][] = [
-        [[66.9, 21.4], [68.1, 21.95], [69.3, 22.45], [70.4, 22.85]],
-        [[68.0, 22.5], [69.2, 22.85], [70.3, 23.2]],
-        [[67.8, 19.6], [69.0, 19.9], [70.2, 20.3]],
-      ];
-      map.addSource("lanes", {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: lanes.map((coords) => ({
-            type: "Feature",
-            properties: { name: "Traffic separation corridor" },
-            geometry: { type: "LineString", coordinates: coords },
-          })),
-        },
-      });
-      map.addLayer({
-        id: "lanes-glow",
-        type: "line",
-        source: "lanes",
-        paint: { "line-color": "#22D3A7", "line-width": 4, "line-blur": 4, "line-opacity": 0.1 },
-      });
-      map.addLayer({
-        id: "lanes-line",
-        type: "line",
-        source: "lanes",
-        paint: {
-          "line-color": "#22D3A7",
-          "line-width": 0.9,
-          "line-dasharray": [3, 6],
-          "line-opacity": 0.3,
-        },
-      });
+    /* ── INDIAN EEZ ──────────────────────────────────────────── */
+    const eez: [number, number][] = [
+      [66.6, 23.9], [67.05, 22.9], [67.35, 21.7], [67.7, 20.2], [68.15, 18.6], [68.9, 17.1], [70.3, 15.0],
+    ];
+    map.addSource("eez", {
+      type: "geojson",
+      data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: eez } },
+    });
+    map.addLayer({
+      id: "eez-glow",
+      type: "line",
+      source: "eez",
+      paint: { "line-color": "#38BDF8", "line-width": 7, "line-blur": 6, "line-opacity": 0.16 },
+    });
+    map.addLayer({
+      id: "eez-line",
+      type: "line",
+      source: "eez",
+      paint: {
+        "line-color": "#38BDF8",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1.6, 9, 0.9],
+        "line-dasharray": [4, 3],
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.65, 9, 0.25],
+      },
+    });
+    map.addSource("eez-label-pt", {
+      type: "geojson",
+      data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [67.28, 22.3] } },
+    });
+    map.addLayer({
+      id: "eez-label",
+      type: "symbol",
+      source: "eez-label-pt",
+      layout: {
+        "text-field": "INDIAN EEZ — 200 NM",
+        "text-size": 9,
+        "text-font": ["Open Sans Semibold"],
+        "text-letter-spacing": 0.18,
+        "text-anchor": "left",
+        "text-offset": [0.8, 0],
+        "text-rotation-alignment": "map",
+      },
+      paint: { "text-color": "#4FA9D6", "text-halo-color": "#04121F", "text-halo-width": 1.4 },
+    });
 
-      /* Wind arrows — uniform NE monsoon flow, scientific dart grid */
-      const windPts: [number, number][] = [
-        [68.1, 21.0], [68.6, 21.3], [69.1, 21.6], [69.6, 21.9],
-        [68.3, 21.7], [68.8, 21.95], [69.4, 22.2], [69.95, 22.45],
-        [68.5, 22.3], [69.0, 22.5], [69.55, 22.75], [70.1, 22.95],
-        [68.8, 22.85], [69.3, 23.05], [69.85, 23.2],
-      ];
-      map.addSource("wind-points", {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: windPts.map((c) => ({
-            type: "Feature",
-            properties: { bearing: 59 },
-            geometry: { type: "Point", coordinates: c },
-          })),
-        },
-      });
-      map.addLayer({
-        id: "wind-arrows",
-        type: "symbol",
-        source: "wind-points",
-        layout: {
-          "icon-image": "arrow-wind",
-          "icon-rotate": ["get", "bearing"],
-          "icon-size": 0.34,
-          "icon-allow-overlap": true,
-        },
-        paint: { "icon-opacity": 0.62 },
-      });
-
-      /* Ocean current vectors — SE monsoon drift over the shelf */
-      const currentPts: { c: [number, number]; b: number }[] = [
-        { c: [67.9, 21.2], b: 119 }, { c: [68.5, 21.5], b: 119 },
-        { c: [69.1, 21.9], b: 119 }, { c: [69.6, 22.3], b: 119 },
-        { c: [68.3, 22.2], b: 119 }, { c: [68.9, 22.6], b: 119 },
-        { c: [69.5, 22.85], b: 119 }, { c: [70.0, 23.1], b: 119 },
-      ];
-      map.addSource("current-points", {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: currentPts.map(({ c, b }) => ({
-            type: "Feature",
-            properties: { bearing: b },
-            geometry: { type: "Point", coordinates: c },
-          })),
-        },
-      });
-      map.addLayer({
-        id: "current-arrows",
-        type: "symbol",
-        source: "current-points",
-        layout: {
-          "icon-image": "arrow-current",
-          "icon-rotate": ["get", "bearing"],
-          "icon-size": 0.42,
-          "icon-allow-overlap": true,
-        },
-        paint: { "icon-opacity": 0.72 },
-      });
-
-      /* Weather overlay — monsoon squall bands sweeping the shelf */
-      map.addSource("weather-bands", {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: [
-            { type: "Feature", properties: { strip: 1 }, geometry: { type: "Polygon", coordinates: [[[66.9, 24.3], [68.9, 22.5], [69.5, 23.2], [67.4, 25.0], [66.9, 24.3]]] } },
-            { type: "Feature", properties: { strip: 2 }, geometry: { type: "Polygon", coordinates: [[[67.9, 23.6], [69.9, 21.9], [70.5, 22.5], [68.4, 24.2], [67.9, 23.6]]] } },
-          ],
-        },
-      });
-      map.addLayer({
-        id: "weather-bands",
-        type: "fill",
-        source: "weather-bands",
-        paint: { "fill-color": "#6E7FCF", "fill-opacity": 0.07 },
-      });
-      map.addLayer({
-        id: "weather-outline",
-        type: "line",
-        source: "weather-bands",
-        paint: { "line-color": "#6E7FCF", "line-width": 0.6, "line-dasharray": [4, 4], "line-opacity": 0.25 },
-      });
-      map.addSource("weather-label", {
-        type: "geojson",
-        data: {
+    /* ── SHIPPING CORRIDORS ──────────────────────────────────── */
+    const lanes: { name: string; traffic: number; coords: [number, number][] }[] = [
+      {
+        name: "MUNDRA EXPORT CORRIDOR",
+        traffic: 3,
+        coords: [[70.0, 22.85], [69.85, 22.7], [69.6, 22.45], [69.2, 21.9], [68.7, 21.4]],
+      },
+      {
+        name: "KANDLA CRUDE IMPORT LANE",
+        traffic: 3,
+        coords: [[70.3, 22.95], [70.1, 22.9], [69.7, 22.8], [69.2, 22.6], [68.6, 22.2]],
+      },
+      {
+        name: "ARABIAN SEA TRANSIT ROUTE",
+        traffic: 2,
+        coords: [[67.8, 19.6], [68.4, 20.6], [69.0, 21.2], [69.6, 21.6], [70.2, 21.9]],
+      },
+      {
+        name: "SIKKA ENERGY TERMINAL ROUTE",
+        traffic: 1,
+        coords: [[69.9, 22.5], [69.75, 22.5], [69.5, 22.4], [69.2, 22.2], [68.9, 22.0]],
+      },
+    ];
+    map.addSource("lanes", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: lanes.map((l) => ({
           type: "Feature",
-          properties: {},
-          geometry: { type: "Point", coordinates: [68.3, 23.2] },
-        },
+          properties: { name: l.name, traffic: l.traffic },
+          geometry: { type: "LineString", coordinates: l.coords },
+        })),
+      },
+    });
+    map.addLayer({
+      id: "lanes-glow",
+      type: "line",
+      source: "lanes",
+      paint: {
+        "line-color": "#22D3A7",
+        "line-width": ["interpolate", ["linear"], ["get", "traffic"], 1, 3, 3, 7],
+        "line-blur": 5,
+        "line-opacity": 0.12,
+      },
+    });
+    map.addLayer({
+      id: "lanes-line",
+      type: "line",
+      source: "lanes",
+      paint: {
+        "line-color": "#22D3A7",
+        "line-width": ["interpolate", ["linear"], ["get", "traffic"], 1, 0.7, 3, 1.2],
+        "line-dasharray": [3, 6],
+        "line-opacity": 0.32,
+      },
+    });
+    /* direction arrows + route labels along each corridor */
+    const laneMeta: { pts: { c: [number, number]; b: number }[]; label: { c: [number, number]; b: number; name: string } }[] =
+      lanes.map((l) => {
+        const pts = l.coords
+          .map((p, i, arr) => {
+            if (i === arr.length - 1) return null;
+            const a = arr[i];
+            const b = arr[i + 1];
+            const t = 0.5;
+            return {
+              c: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t] as [number, number],
+              b: bearingDeg(a, b),
+            };
+          })
+          .filter(Boolean) as { c: [number, number]; b: number }[];
+        const mid = l.coords[Math.floor(l.coords.length / 2)];
+        return { pts, label: { c: mid, b: bearingDeg(l.coords[0], l.coords[1]), name: l.name } };
       });
-      map.addLayer({
-        id: "weather-label",
-        type: "symbol",
-        source: "weather-label",
-        layout: {
-          "text-field": "MONSOON SQUALL · 32KT · PRECIP 40%",
-          "text-size": 8,
-          "text-font": ["Open Sans Regular"],
-          "text-letter-spacing": 0.08,
-        },
-        paint: { "text-color": "#A8B4E8", "text-halo-color": "#04121F", "text-halo-width": 1.3 },
-      });
-
-      /* Ports — Kandla, Mundra, Sikka, Vadinar (Gulf of Kutch terminals) */
-      const ports: { name: string; c: [number, number] }[] = [
-        { name: "KANDLA", c: [70.22, 23.03] },
-        { name: "MUNDRA", c: [69.73, 22.85] },
-        { name: "SIKKA", c: [69.84, 22.43] },
-        { name: "VADINAR", c: [69.72, 22.48] },
-      ];
-      map.addSource("ports", {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: ports.map((p) => ({
+    map.addSource("lane-arrows", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: laneMeta.flatMap(({ pts }) =>
+          pts.map((p) => ({
             type: "Feature",
-            properties: { name: p.name },
+            properties: { bearing: p.b },
             geometry: { type: "Point", coordinates: p.c },
-          })),
-        },
-      });
-      map.addLayer({
-        id: "ports-dot",
-        type: "circle",
-        source: "ports",
-        minzoom: 5.5,
-        paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5.5, 1.4, 8, 2.8],
-          "circle-color": "#E0863D",
-          "circle-stroke-width": 1,
-          "circle-stroke-color": "#050B11",
-          "circle-opacity": 0.9,
-        },
-      });
-      map.addLayer({
-        id: "ports-label",
-        type: "symbol",
-        source: "ports",
-        minzoom: 6.8,
-        layout: {
-          "text-field": ["get", "name"],
-          "text-size": 8.5,
-          "text-font": ["Open Sans Regular"],
-          "text-letter-spacing": 0.1,
-          "text-anchor": "bottom",
-          "text-offset": [0, -0.6],
-        },
-        paint: { "text-color": "#7C9AA8", "text-halo-color": "#06121C", "text-halo-width": 1.4 },
-      });
+          }))
+        ),
+      },
+    });
+    map.addLayer({
+      id: "lanes-arrows",
+      type: "symbol",
+      source: "lane-arrows",
+      layout: {
+        "icon-image": "arrow-lane",
+        "icon-rotate": ["get", "bearing"],
+        "icon-size": 0.32,
+        "icon-allow-overlap": true,
+        "icon-rotation-alignment": "map",
+      },
+      paint: { "icon-opacity": 0.55 },
+    });
+    map.addSource("lane-labels", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: laneMeta.map(({ label }) => ({
+          type: "Feature",
+          properties: { name: label.name, bearing: label.b },
+          geometry: { type: "Point", coordinates: label.c },
+        })),
+      },
+    });
+    map.addLayer({
+      id: "lanes-label",
+      type: "symbol",
+      source: "lane-labels",
+      minzoom: 6,
+      layout: {
+        "text-field": ["get", "name"],
+        "text-size": 7.5,
+        "text-font": ["Open Sans Regular"],
+        "text-letter-spacing": 0.12,
+        "text-rotation-alignment": "map",
+        "symbol-placement": "point",
+        "text-allow-overlap": false,
+      },
+      paint: { "text-color": "#8FE3CF", "text-halo-color": "#04121F", "text-halo-width": 1.2 },
+    });
 
-      /* Anchorages — designated holding zones off the Gulf terminals */
-      const anchorZones: [number, number][][] = [
-        [[70.02, 22.92], [70.16, 22.90], [70.15, 22.97], [70.02, 23.00]],
-        [[69.60, 22.80], [69.72, 22.74], [69.75, 22.81], [69.62, 22.88]],
-        [[69.80, 22.34], [69.92, 22.28], [69.96, 22.35], [69.83, 22.42]],
-        [[69.64, 22.24], [69.76, 22.18], [69.79, 22.25], [69.67, 22.31]],
-      ];
-      map.addSource("anchors", {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: anchorZones.map((ring) => ({
-            type: "Feature",
-            properties: {},
-            geometry: { type: "Polygon", coordinates: [[...ring, ring[0]]] },
-          })),
-        },
-      });
-      map.addLayer({
-        id: "anchors-fill",
-        type: "fill",
-        source: "anchors",
-        paint: { "fill-color": "#38BDF8", "fill-opacity": 0.045 },
-      });
-      map.addLayer({
-        id: "anchors-line",
-        type: "line",
-        source: "anchors",
-        paint: {
-          "line-color": "#38BDF8",
-          "line-width": 0.8,
-          "line-dasharray": [2, 3],
-          "line-opacity": 0.4,
-        },
-      });
-      map.addSource("anchors-labels", {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: anchorZones.map((ring, i) => ({
-            type: "Feature",
-            properties: { n: i + 1 },
-            geometry: {
-              type: "Point",
-              coordinates: [
-                ring.reduce((s, p) => s + p[0], 0) / ring.length,
-                ring.reduce((s, p) => s + p[1], 0) / ring.length,
-              ],
-            },
-          })),
-        },
-      });
-      map.addLayer({
-        id: "anchors-label",
-        type: "symbol",
-        source: "anchors-labels",
-        layout: {
-          "text-field": ["concat", "ANCH A", ["to-string", ["get", "n"]]],
-          "text-size": 7.5,
-          "text-font": ["Open Sans Regular"],
-          "text-letter-spacing": 0.08,
-          "text-anchor": "center",
-        },
-        paint: { "text-color": "#69C2E8", "text-halo-color": "#04121F", "text-halo-width": 1.2 },
-      });
+    /* ── WIND ARROWS — NE monsoon field ───────────────────────── */
+    const windPts: { c: [number, number]; b: number; base: number }[] = [
+      { c: [68.1, 21.0], b: 59, base: 59 }, { c: [68.6, 21.3], b: 59, base: 59 }, { c: [69.1, 21.6], b: 59, base: 59 }, { c: [69.6, 21.9], b: 59, base: 59 },
+      { c: [68.3, 21.7], b: 59, base: 59 }, { c: [68.8, 21.95], b: 59, base: 59 }, { c: [69.4, 22.2], b: 59, base: 59 }, { c: [69.95, 22.45], b: 59, base: 59 },
+      { c: [68.5, 22.3], b: 59, base: 59 }, { c: [69.0, 22.5], b: 59, base: 59 }, { c: [69.55, 22.75], b: 59, base: 59 }, { c: [70.1, 22.95], b: 59, base: 59 },
+      { c: [68.8, 22.85], b: 59, base: 59 }, { c: [69.3, 23.05], b: 59, base: 59 }, { c: [69.85, 23.2], b: 59, base: 59 },
+    ];
+    map.addSource("wind-points", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: windPts.map((w) => ({
+          type: "Feature",
+          properties: { bearing: w.b, base: w.base },
+          geometry: { type: "Point", coordinates: w.c },
+        })),
+      },
+    });
+    map.addLayer({
+      id: "wind-arrows",
+      type: "symbol",
+      source: "wind-points",
+      layout: {
+        "icon-image": "arrow-wind",
+        "icon-rotate": ["get", "bearing"],
+        "icon-size": 0.34,
+        "icon-allow-overlap": true,
+      },
+      paint: { "icon-opacity": 0.6 },
+    });
 
-      if (inc) addOilLayers(map, inc);
+    /* ── OCEAN CURRENT VECTORS ───────────────────────────────── */
+    const currentPts: { c: [number, number]; b: number }[] = [
+      { c: [67.9, 21.2], b: 119 }, { c: [68.5, 21.5], b: 119 },
+      { c: [69.1, 21.9], b: 119 }, { c: [69.6, 22.3], b: 119 },
+      { c: [68.3, 22.2], b: 119 }, { c: [68.9, 22.6], b: 119 },
+      { c: [69.5, 22.85], b: 119 }, { c: [70.0, 23.1], b: 119 },
+    ];
+    map.addSource("current-points", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: currentPts.map(({ c, b }) => ({
+          type: "Feature",
+          properties: { bearing: b },
+          geometry: { type: "Point", coordinates: c },
+        })),
+      },
+    });
+    map.addLayer({
+      id: "current-arrows",
+      type: "symbol",
+      source: "current-points",
+      layout: {
+        "icon-image": "arrow-current",
+        "icon-rotate": ["get", "bearing"],
+        "icon-size": 0.42,
+        "icon-allow-overlap": true,
+      },
+      paint: { "icon-opacity": 0.68 },
+    });
 
-      /* RK4 drift trajectory — progressively revealed by lerp loop */
-      const coords = driftLine.map((p: DriftTrajectoryPoint) => [p.longitude, p.latitude]);
-      map.addSource("drift-path", {
-        type: "geojson",
-        data: {
+    /* ── WEATHER — monsoon squall + wave-energy heat ─────────── */
+    map.addSource("weather-bands", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: { strip: 1 }, geometry: { type: "Polygon", coordinates: [[[66.9, 24.3], [68.9, 22.5], [69.5, 23.2], [67.4, 25.0], [66.9, 24.3]]] } },
+          { type: "Feature", properties: { strip: 2 }, geometry: { type: "Polygon", coordinates: [[[67.9, 23.6], [69.9, 21.9], [70.5, 22.5], [68.4, 24.2], [67.9, 23.6]]] } },
+        ],
+      },
+    });
+    map.addLayer({
+      id: "weather-bands",
+      type: "fill",
+      source: "weather-bands",
+      paint: { "fill-color": "#6E7FCF", "fill-opacity": 0.06 },
+    });
+    map.addLayer({
+      id: "weather-outline",
+      type: "line",
+      source: "weather-bands",
+      paint: { "line-color": "#6E7FCF", "line-width": 0.6, "line-dasharray": [4, 4], "line-opacity": 0.22 },
+    });
+    map.addSource("weather-label", {
+      type: "geojson",
+      data: { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [68.3, 23.2] } },
+    });
+    map.addLayer({
+      id: "weather-label",
+      type: "symbol",
+      source: "weather-label",
+      layout: {
+        "text-field": "MONSOON SQUALL · 32KT · SEA 2.1M",
+        "text-size": 8,
+        "text-font": ["Open Sans Regular"],
+        "text-letter-spacing": 0.08,
+      },
+      paint: { "text-color": "#A8B4E8", "text-halo-color": "#04121F", "text-halo-width": 1.3 },
+    });
+    /* wave-height field — offshore swell gradient (blue heat) */
+    const wavePts: { c: [number, number]; w: number }[] = [];
+    for (let d = 0; d < 14; d++) {
+      const dt = d * 0.42;
+      const dans = d * 0.9;
+      for (let k = 0; k < 5; k++) {
+        const kt = (k + (d % 2) * 0.5) * 0.34;
+        wavePts.push({
+          c: [67.0 + dt * 0.16 + kt, 19.6 + dans * 0.18 + (k % 2) * 0.3],
+          w: 1.1 + ((d + k) % 4) * 0.55,
+        });
+      }
+    }
+    map.addSource("wave-field", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: wavePts.map((p) => ({
+          type: "Feature",
+          properties: { w: p.w },
+          geometry: { type: "Point", coordinates: p.c },
+        })),
+      },
+    });
+    map.addLayer({
+      id: "wave-heat",
+      type: "heatmap",
+      source: "wave-field",
+      paint: {
+        "heatmap-weight": ["get", "w"],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 5.5, 18, 9, 40],
+        "heatmap-intensity": 0.7,
+        "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 4.5, 0, 6, 0.4, 9, 0.15],
+        "heatmap-color": [
+          "interpolate", ["linear"], ["heatmap-density"],
+          0, "rgba(0,0,0,0)",
+          0.3, "rgba(23,110,190,0.35)",
+          0.6, "rgba(24,160,210,0.5)",
+          1, "rgba(96,235,240,0.6)",
+        ],
+      },
+    });
+
+    /* ── PORTS — realistic beacons ───────────────────────────── */
+    const ports: { name: string; c: [number, number]; throughput: string; vessels: number }[] = [
+      { name: "KANDLA", c: [70.22, 23.03], throughput: "144 MT/yr", vessels: 41 },
+      { name: "MUNDRA", c: [69.73, 22.85], throughput: "155 MT/yr", vessels: 63 },
+      { name: "SIKKA", c: [69.84, 22.43], throughput: "42 MT/yr", vessels: 17 },
+      { name: "OKHA", c: [69.07, 22.47], throughput: "8 MT/yr", vessels: 6 },
+      { name: "VADINAR", c: [69.72, 22.48], throughput: "96 MT/yr", vessels: 29 },
+    ];
+    map.addSource("ports", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: ports.map((p) => ({
+          type: "Feature",
+          properties: { name: p.name, throughput: p.throughput, vessels: p.vessels },
+          geometry: { type: "Point", coordinates: p.c },
+        })),
+      },
+    });
+    map.addLayer({
+      id: "ports-halo",
+      type: "circle",
+      source: "ports",
+      minzoom: 5,
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 5, 8, 11],
+        "circle-color": "#38BDF8",
+        "circle-blur": 1,
+        "circle-opacity": 0.22,
+      },
+    });
+    map.addLayer({
+      id: "ports-dot",
+      type: "circle",
+      source: "ports",
+      minzoom: 5.5,
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 5.5, 1.4, 8, 2.6],
+        "circle-color": "#5FD8EC",
+        "circle-stroke-width": 1,
+        "circle-stroke-color": "#050B11",
+        "circle-opacity": 0.95,
+      },
+    });
+    map.addLayer({
+      id: "ports-label",
+      type: "symbol",
+      source: "ports",
+      minzoom: 6.8,
+      layout: {
+        "text-field": ["get", "name"],
+        "text-size": 8.5,
+        "text-font": ["Open Sans Semibold"],
+        "text-letter-spacing": 0.1,
+        "text-anchor": "bottom",
+        "text-offset": [0, -0.6],
+      },
+      paint: { "text-color": "#9FE6F2", "text-halo-color": "#06121C", "text-halo-width": 1.4 },
+    });
+
+    /* ── ANCHORAGES ──────────────────────────────────────────── */
+    const anchorZones: [number, number][][] = [
+      [[70.02, 22.92], [70.16, 22.90], [70.15, 22.97], [70.02, 23.00]],
+      [[69.60, 22.80], [69.72, 22.74], [69.75, 22.81], [69.62, 22.88]],
+      [[69.80, 22.34], [69.92, 22.28], [69.96, 22.35], [69.83, 22.42]],
+      [[69.64, 22.24], [69.76, 22.18], [69.79, 22.25], [69.67, 22.31]],
+    ];
+    map.addSource("anchors", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: anchorZones.map((ring) => ({
           type: "Feature",
           properties: {},
-          geometry: { type: "LineString", coordinates: coords },
-        },
-      });
-      map.addLayer({
-        id: "drift-path",
-        type: "line",
-        source: "drift-path",
-        paint: {
-          "line-color": "#38BDF8",
-          "line-width": 1.6,
-          "line-opacity": 0.6,
-          "line-dasharray": [1.5, 2.5],
-        },
-      });
+          geometry: { type: "Polygon", coordinates: [[...ring, ring[0]]] },
+        })),
+      },
+    });
+    map.addLayer({
+      id: "anchors-fill",
+      type: "fill",
+      source: "anchors",
+      paint: { "fill-color": "#38BDF8", "fill-opacity": 0.045 },
+    });
+    map.addLayer({
+      id: "anchors-line",
+      type: "line",
+      source: "anchors",
+      paint: {
+        "line-color": "#38BDF8",
+        "line-width": 0.8,
+        "line-dasharray": [2, 3],
+        "line-opacity": 0.4,
+      },
+    });
 
-      /* Drift origin marker (moves as the backtrack plays) */
-      const origin = driftLine[driftLine.length - 1];
-      map.addSource("drift-origin", {
+    /* ── TRAFFIC DENSITY HEAT (live AIS field) ───────────────── */
+    if (!map.getSource("traffic-density")) {
+      map.addSource("traffic-density", {
         type: "geojson",
-        data: {
-          type: "Feature",
-          properties: {},
-          geometry: { type: "Point", coordinates: [origin.longitude, origin.latitude] },
-        },
+        data: { type: "FeatureCollection", features: [] },
       });
+    }
+    if (!map.getLayer("density-heat")) {
       map.addLayer({
-        id: "drift-origin",
-        type: "circle",
-        source: "drift-origin",
+        id: "density-heat",
+        type: "heatmap",
+        source: "traffic-density",
         paint: {
-          "circle-radius": 4.5,
-          "circle-color": "#38BDF8",
-          "circle-stroke-width": 1.5,
-          "circle-stroke-color": "#050B11",
-          "circle-opacity": 0.95,
+          "heatmap-weight": ["get", "w"],
+          "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 6, 22, 9, 55],
+          "heatmap-intensity": 1,
+          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 5.5, 0.3, 9.2, 0.12],
+          "heatmap-color": [
+            "interpolate",
+            ["linear"],
+            ["heatmap-density"],
+            0, "rgba(0,0,0,0)",
+            0.15, "rgba(56,189,248,0.2)",
+            0.45, "rgba(224,134,61,0.4)",
+            0.7, "rgba(239,140,60,0.5)",
+            1, "rgba(239,68,68,0.55)",
+          ],
         },
       });
+    }
 
-      /* Layer ordering via toggles handled by visibility effect */
+    /* ── RK4 REVERSE DRIFT PATH ──────────────────────────────── */
+    const coords = driftLine.map((p: DriftTrajectoryPoint) => [p.longitude, p.latitude]);
+    map.addSource("drift-path", {
+      type: "geojson",
+      data: {
+        type: "Feature",
+        properties: {},
+        geometry: { type: "LineString", coordinates: coords },
+      },
+    });
+    map.addLayer({
+      id: "drift-path",
+      type: "line",
+      source: "drift-path",
+      paint: {
+        "line-color": "#38BDF8",
+        "line-width": 1.6,
+        "line-opacity": 0.6,
+        "line-dasharray": [1.5, 2.5],
+      },
+    });
+    /* hourly reconstruction markers */
+    map.addSource("drift-h-marks", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: driftLine.map((p) => ({
+          type: "Feature",
+          properties: { hour: p.hourOffset },
+          geometry: { type: "Point", coordinates: [p.longitude, p.latitude] },
+        })),
+      },
+    });
+    map.addLayer({
+      id: "drift-h-dots",
+      type: "circle",
+      source: "drift-h-marks",
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 1.1, 10, 2.2],
+        "circle-color": "#7DD3FC",
+        "circle-stroke-width": 0.6,
+        "circle-stroke-color": "#04121F",
+        "circle-opacity": 0.55,
+      },
+    });
+    map.addLayer({
+      id: "drift-h-labels",
+      type: "symbol",
+      source: "drift-h-marks",
+      minzoom: 8,
+      layout: {
+        "text-field": ["concat", "T-", ["to-string", ["get", "hour"]]],
+        "text-size": 7,
+        "text-font": ["Open Sans Regular"],
+        "text-offset": [0, -0.8],
+        "text-anchor": "bottom",
+        "text-allow-overlap": true,
+      },
+      paint: { "text-color": "#7DD3FC", "text-halo-color": "#04121F", "text-halo-width": 1.2 },
+    });
+
+    /* origin uncertainty ellipse */
+    const origin = driftLine[driftLine.length - 1];
+    map.addSource("drift-origin", {
+      type: "geojson",
+      data: {
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Point", coordinates: [origin.longitude, origin.latitude] },
+      },
+    });
+    map.addLayer({
+      id: "drift-ellipse",
+      type: "circle",
+      source: "drift-origin",
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 3, 9, 6],
+        "circle-color": "#D6A84F",
+        "circle-blur": 1,
+        "circle-opacity": 0.4,
+      },
+    });
+    map.addLayer({
+      id: "drift-origin",
+      type: "circle",
+      source: "drift-origin",
+      paint: {
+        "circle-radius": 4.5,
+        "circle-color": "#D6A84F",
+        "circle-stroke-width": 1.5,
+        "circle-stroke-color": "#050B11",
+        "circle-opacity": 0.95,
+      },
+    });
+    map.addSource("drift-origin-label", {
+      type: "geojson",
+      data: {
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Point", coordinates: [origin.longitude, origin.latitude] },
+      },
+    });
+    map.addLayer({
+      id: "drift-origin-label",
+      type: "symbol",
+      source: "drift-origin-label",
+      minzoom: 7,
+      layout: {
+        "text-field": "DISCHARGE ORIGIN · T-12H",
+        "text-size": 7.5,
+        "text-font": ["Open Sans Semibold"],
+        "text-letter-spacing": 0.1,
+        "text-anchor": "bottom",
+        "text-offset": [0, -1.1],
+      },
+      paint: { "text-color": "#E6C078", "text-halo-color": "#04121F", "text-halo-width": 1.3 },
+    });
   }
 
-  /* ── ADD OIL POLYGON LAYERS ──────────────────────────────── */
+  /* ═══════════════════════════════════════════════════════════
+     OIL SPILL LAYERS — thin (trail etc.) SYNCED ENGINE
+     ═══════════════════════════════════════════════════════════ */
+  function pointInRing(pt: [number, number], ring: number[][]): boolean {
+    const [x, y] = pt;
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1];
+      const xj = ring[j][0], yj = ring[j][1];
+      const intersect =
+        yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function removeOilLayers(map: maplibregl.Map) {
+    const ids = [
+      "oil-fill", "oil-sheen", "oil-heat", "oil-glow", "oil-outline",
+      "oil-centroid", "oil-ring", "oil-sar-dark",
+    ];
+    ids.forEach((id) => {
+      if (map.getLayer(id)) map.removeLayer(id);
+    });
+    const srcs = [
+      "oil-poly", "oil-heat-pts", "oil-centroid-src", "oil-sar",
+    ];
+    srcs.forEach((s) => {
+      if (map.getSource(s)) map.removeSource(s);
+    });
+  }
+
   function addOilLayers(map: maplibregl.Map, inc: Incident) {
-    const coords = inc.spillGeometry.polygonGeoJson.coordinates;
-    map.addSource("oil-spill", {
+    const coords: number[][] = inc.spillGeometry.polygonGeoJson.coordinates[0];
+    const ring = coords as [number, number][];
+
+    /* SAR dark anomaly — the low-backscatter footprint the oil damps */
+    map.addSource("oil-sar", {
       type: "geojson",
       data: {
         type: "Feature",
         properties: { eventId: inc.eventId },
-        geometry: { type: "Polygon", coordinates: coords },
+        geometry: { type: "Polygon", coordinates: [ring] },
       },
     });
     map.addLayer({
-      id: "oil-glow",
-      type: "line",
-      source: "oil-spill",
-      paint: { "line-color": "#E0863D", "line-width": 7, "line-blur": 7, "line-opacity": 0.24 },
+      id: "oil-sar-dark",
+      type: "fill",
+      source: "oil-sar",
+      paint: {
+        "fill-color": "#01060C",
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 7, 0.22, 9.5, 0.4],
+      },
+    });
+
+    /* fallback tint + click target (also the interactive surface) */
+    map.addSource("oil-poly", {
+      type: "geojson",
+      data: {
+        type: "Feature",
+        properties: { eventId: inc.eventId },
+        geometry: { type: "Polygon", coordinates: [ring] },
+      },
     });
     map.addLayer({
       id: "oil-fill",
       type: "fill",
-      source: "oil-spill",
+      source: "oil-poly",
       paint: {
         "fill-color": "#D6A84F",
-        "fill-opacity": 0.26,
+        "fill-opacity": 0.1,
         "fill-outline-color": "#D6A84F",
       },
+    });
+
+    /* procedural multilayered sheen — WebGL custom layer */
+    try {
+      const created = createOilSheenLayer("oil-sheen", ring);
+      if (map.getLayer("oil-sheen")) map.removeLayer("oil-sheen");
+      map.addLayer(created.layer);
+      sheenRef.current = created.handle;
+      sheenRef.current.setAlpha(0.3);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("SD: oil sheen engine unavailable, using tint only.", err);
+    }
+
+    /* contamination heatmap — yellow → orange → crimson near origin */
+    const bb = inc.spillGeometry.boundingBox;
+    const heatPts: { c: [number, number]; w: number }[] = [];
+    const cx = inc.spillGeometry.centroid.longitude;
+    const cy = inc.spillGeometry.centroid.latitude;
+    let maxH = 1e-9;
+    for (let i = 0; i < 90; i++) {
+      const lng = bb.lowerLeft.longitude + Math.random() * (bb.upperRight.longitude - bb.lowerLeft.longitude);
+      const lat = bb.lowerLeft.latitude + Math.random() * (bb.upperRight.latitude - bb.lowerLeft.latitude);
+      if (!pointInRing([lng, lat], ring)) continue;
+      const d = Math.hypot(lng - cx, lat - cy);
+      const w = Math.max(0.02, 1 - d * 3.2);
+      if (w > maxH) maxH = w;
+      heatPts.push({ c: [lng, lat], w });
+    }
+    heatPts.forEach((p) => (p.w = p.w / (maxH * 0.6)));
+    map.addSource("oil-heat-pts", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: heatPts.map((p) => ({
+          type: "Feature",
+          properties: { w: p.w },
+          geometry: { type: "Point", coordinates: p.c },
+        })),
+      },
+    });
+    map.addLayer({
+      id: "oil-heat",
+      type: "heatmap",
+      source: "oil-heat-pts",
+      paint: {
+        "heatmap-weight": ["get", "w"],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 7, 20, 9.5, 46],
+        "heatmap-intensity": 0.85,
+        "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 6.5, 0, 7.6, 0.55, 9.5, 0.3],
+        "heatmap-color": [
+          "interpolate", ["linear"], ["heatmap-density"],
+          0, "rgba(0,0,0,0)",
+          0.2, "rgba(255,238,140,0.22)",
+          0.45, "rgba(255,180,70,0.42)",
+          0.7, "rgba(255,110,50,0.55)",
+          1, "rgba(226,40,45,0.66)",
+        ],
+      },
+    });
+
+    /* boundary outline — organic GeoJSON edge */
+    map.addLayer({
+      id: "oil-glow",
+      type: "line",
+      source: "oil-poly",
+      paint: { "line-color": "#E0863D", "line-width": 7, "line-blur": 7, "line-opacity": 0.24 },
     });
     map.addLayer({
       id: "oil-outline",
       type: "line",
-      source: "oil-spill",
-      paint: { "line-color": "#E0863D", "line-width": 1.6, "line-opacity": 0.75 },
+      source: "oil-poly",
+      paint: { "line-color": "#E0863D", "line-width": 1.4, "line-opacity": 0.75 },
     });
 
+    /* centroid marker */
     const centroid = inc.spillGeometry.centroid;
-    map.addSource("oil-centroid", {
+    map.addSource("oil-centroid-src", {
       type: "geojson",
       data: {
         type: "Feature",
@@ -799,9 +1221,9 @@ function addBaseLayers(map: maplibregl.Map) {
       },
     });
     map.addLayer({
-      id: "oil-pulse",
+      id: "oil-centroid",
       type: "circle",
-      source: "oil-centroid",
+      source: "oil-centroid-src",
       paint: {
         "circle-radius": 3.5,
         "circle-color": "#D6A84F",
@@ -813,7 +1235,7 @@ function addBaseLayers(map: maplibregl.Map) {
     map.addLayer({
       id: "oil-ring",
       type: "circle",
-      source: "oil-centroid",
+      source: "oil-centroid-src",
       paint: {
         "circle-radius": 4,
         "circle-color": "#D6A84F",
@@ -822,28 +1244,69 @@ function addBaseLayers(map: maplibregl.Map) {
         "circle-stroke-color": "#E0863D",
       },
     });
-    map.addLayer({
-      id: "oil-ripple",
-      type: "circle",
-      source: "oil-centroid",
-      paint: {
-        "circle-radius": 4,
-        "circle-color": "#D6A84F",
-        "circle-opacity": 0,
-        "circle-stroke-width": 1.4,
-        "circle-stroke-color": "#E0863D",
-      },
-    });
-    map.on("click", "oil-fill", () => onSpillClick?.(inc));
-    map.on("mouseenter", "oil-fill", () => {
-      map.getCanvas().style.cursor = "pointer";
-    });
-    map.on("mouseleave", "oil-fill", () => {
-      map.getCanvas().style.cursor = "";
-    });
+
+    if (map.getLayer("oil-fill")) {
+      map.on("click", "oil-fill", () => onSpillClick?.(inc));
+      map.on("mouseenter", "oil-fill", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "oil-fill", () => {
+        map.getCanvas().style.cursor = "";
+      });
+      map.on("click", "oil-outline", () => onSpillClick?.(inc));
+      map.on("mouseenter", "oil-outline", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "oil-outline", () => {
+        map.getCanvas().style.cursor = "";
+      });
+    }
   }
 
-  /* ── INITIALISE MAP ────────────────────────────────────────── */
+  /* Port hover card popups */
+  function wirePortPopups(map: maplibregl.Map) {
+    if (!map.getLayer("ports-dot")) return;
+    for (const evt of ["mouseenter", "click"] as const) {
+      map.on(evt, "ports-dot", (e) => {
+        const feat = e.features?.[0];
+        if (!feat) return;
+        const props = feat.properties as any;
+        const name = props?.name ?? "PORT";
+        const throughput = props?.throughput ?? "—";
+        const vessels = props?.vessels ?? "—";
+        const el = document.createElement("div");
+        el.className =
+          "pointer-events-none rounded-md bg-bg-1/95 px-2.5 py-1.5 font-mono text-[10px] text-ink ring-1 ring-line shadow-float";
+        el.innerHTML = `
+          <div class="flex items-center gap-1.5 font-semibold text-aqua">
+            <span class="h-1.5 w-1.5 rounded-full bg-aqua animate-pulse"></span>${name}
+          </div>
+          <div class="mt-1 flex gap-3 text-ink-dim">
+            <span><span class="text-ink-faint">THROUGHPUT</span> ${throughput}</span>
+            <span><span class="text-ink-faint">VESSELS</span> ${vessels}</span>
+          </div>`;
+        const popup = new maplibregl.Popup({
+          offset: 10,
+          closeButton: false,
+          closeOnClick: false,
+          className: "sd-port-popup",
+        })
+          .setLngLat((feat.geometry as any).coordinates)
+          .setDOMContent(el)
+          .addTo(map);
+        const clear = () => {
+          popup.remove();
+          map.off("mousemove", clear);
+        };
+        map.once("mousemove", () => {}); /* noop to release the handler flow */
+        setTimeout(clear, 2600);
+      });
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     MAP INIT
+     ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -870,7 +1333,11 @@ function addBaseLayers(map: maplibregl.Map) {
             source: "navy",
             paint: {
               "raster-opacity": 1,
-              "raster-saturation": -0.12,
+              "raster-saturation": -0.15,
+              "raster-contrast": 0.18,
+              "raster-brightness-min": 0.72,
+              "raster-brightness-max": 1.05,
+              "raster-fade-duration": 200,
             },
           },
         ],
@@ -880,12 +1347,14 @@ function addBaseLayers(map: maplibregl.Map) {
       attributionControl: false,
       pitchWithRotate: false,
       dragRotate: false,
+      canvasContextAttributes: { antialias: true },
     });
 
     map.on("load", () => {
       setMapLoaded(true);
       map.resize();
       addBaseLayers(map);
+      wirePortPopups(map);
     });
 
     map.on("move", () => {
@@ -898,13 +1367,26 @@ function addBaseLayers(map: maplibregl.Map) {
     return () => {
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
+      markersByImoRef.current.clear();
       map.remove();
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── SMOOTH RK4 BACKTRACK — lerp path + origin backward ────── */
+  /* ── OIL LAYERS SYNCED TO THE SELECTED INCIDENT ────────────── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || !incident) return;
+    removeOilLayers(map);
+    addOilLayers(map, incident);
+    return () => {
+      /* keep layers for the drawer switching back */
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incident, mapLoaded]);
+
+  /* ── SMOOTH RK4 BACKTRACK ──────────────────────────────────── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
@@ -968,6 +1450,14 @@ function addBaseLayers(map: maplibregl.Map) {
           },
         });
       }
+      const ogLabel = map.getSource("drift-origin-label") as maplibregl.GeoJSONSource | undefined;
+      if (ogLabel) {
+        ogLabel.setData({
+          type: "Feature",
+          properties: {},
+          geometry: { type: "Point", coordinates: coords[coords.length - 1] },
+        });
+      }
 
       const settled = Math.abs(target - smooth.v) < 0.003;
       if (settled && !s.isDemoRunning) {
@@ -1007,7 +1497,7 @@ function addBaseLayers(map: maplibregl.Map) {
     };
   }, [mapLoaded]);
 
-  /* ── OIL PULSE — fast centroid ring every 900 ms + slow sheen ripple every 3 s ── */
+  /* ── OIL PULSE — soft amber contamination ring every 5 s ───── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !incident || !map.getLayer("oil-ring")) return;
@@ -1017,12 +1507,9 @@ function addBaseLayers(map: maplibregl.Map) {
     let raf = 0;
     const step = (t: number) => {
       if (!document.hidden) {
-        const k = ((t - t0) / 900) % 1;
-        map.setPaintProperty("oil-ring", "circle-radius", 4 + k * 7);
-        map.setPaintProperty("oil-ring", "circle-opacity", 0.4 * (1 - k));
-        const r = ((t - t0) / 3000) % 1;
-        map.setPaintProperty("oil-ripple", "circle-radius", 4 + r * 15);
-        map.setPaintProperty("oil-ripple", "circle-opacity", 0.3 * (1 - r) * (1 - r));
+        const k = ((t - t0) / 5000) % 1;
+        map.setPaintProperty("oil-ring", "circle-radius", 4 + k * 24);
+        map.setPaintProperty("oil-ring", "circle-opacity", 0.38 * (1 - k) * (1 - k));
       }
       raf = requestAnimationFrame(step);
     };
@@ -1030,7 +1517,6 @@ function addBaseLayers(map: maplibregl.Map) {
       if (document.hidden) {
         cancelAnimationFrame(raf);
         map.setPaintProperty("oil-ring", "circle-opacity", 0);
-        map.setPaintProperty("oil-ripple", "circle-opacity", 0);
       } else {
         raf = requestAnimationFrame(step);
       }
@@ -1043,7 +1529,7 @@ function addBaseLayers(map: maplibregl.Map) {
     };
   }, [incident, mapLoaded]);
 
-  /* ── CURRENT PARTICLES — slow drifTing specks on the ambient water ── */
+  /* ── CURRENT PARTICLES + SUBTLE CAUSTIC SHIMMER ────────────── */
   useEffect(() => {
     const cv = particlesRef.current;
     if (!cv || !mapLoaded) return;
@@ -1057,29 +1543,33 @@ function addBaseLayers(map: maplibregl.Map) {
     fit();
     window.addEventListener("resize", fit);
 
-    type P = { x: number; y: number; vx: number; vy: number; r: number; a: number };
+    type P = { x: number; y: number; vx: number; vy: number; r: number; a: number; ph: number };
     const mk = (): P => {
-      const s = 6 + Math.random() * 11;
-      const a = 0.85 + Math.random() * 0.3; // flow skew toward SE
+      const s = 5 + Math.random() * 10;
+      const a = 0.85 + Math.random() * 0.3;
       return {
         x: Math.random() * cv.width,
         y: Math.random() * cv.height,
         vx: a * s,
         vy: a * s * 0.72,
-        r: 0.6 + Math.random() * 1,
-        a: 0.1 + Math.random() * 0.2,
+        r: 0.5 + Math.random() * 0.9,
+        a: 0.08 + Math.random() * 0.18,
+        ph: Math.random() * Math.PI * 2,
       };
     };
-    const parts: P[] = Array.from({ length: reduced ? 0 : 30 }, mk);
-    const eddies: P[] = Array.from({ length: reduced ? 0 : 5 }, () => ({
-      ...mk(), r: 2 + Math.random(), a: 0.06 + Math.random() * 0.08,
+    const parts: P[] = Array.from({ length: reduced ? 0 : 44 }, mk);
+    const eddies: P[] = Array.from({ length: reduced ? 0 : 6 }, () => ({
+      ...mk(), r: 2 + Math.random(), a: 0.05 + Math.random() * 0.08, ph: Math.random() * 6,
     }));
 
     let raf = 0;
-    const draw = () => {
+    let tickMs = 0;
+    const draw = (t: number) => {
       ctx.clearRect(0, 0, cv.width, cv.height);
+      tickMs = t;
       for (const p of [...parts, ...eddies]) {
-        p.x += p.vx; p.y += p.vy;
+        p.x += p.vx * 0.016;
+        p.y += p.vy * 0.016;
         if (p.x > cv.width + 4) p.x = -4;
         if (p.y > cv.height + 4) p.y = -4;
         ctx.beginPath();
@@ -1087,16 +1577,29 @@ function addBaseLayers(map: maplibregl.Map) {
         ctx.fillStyle = `rgba(122,205,244,${p.a})`;
         ctx.fill();
       }
+      /* very subtle caustic veils — barely-there moving arcs */
+      if (!reduced) {
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+          const bcx = cv.width * (0.2 + (i % 4) * 0.2);
+          const bcy = cv.height * (0.6 + ((i / 2) % 2) * 0.3);
+          const q = 0.5 + 0.5 * Math.sin(tickMs / 2400 + i * 1.7);
+          ctx.strokeStyle = `rgba(76,190,235,${0.05 + q * 0.05})`;
+          ctx.beginPath();
+          ctx.ellipse(bcx, bcy, 14 + i * 9 + q * 8, 5 + i * 2.4 + q * 3, i * 0.9, 0, Math.PI * 1.4);
+          ctx.stroke();
+        }
+      }
       if (reduced) return;
       raf = requestAnimationFrame(draw);
     };
     const onVis = () => {
       cancelAnimationFrame(raf);
       if (document.hidden) return;
-      if (reduced) draw();
+      if (reduced) draw(performance.now());
       else raf = requestAnimationFrame(draw);
     };
-    draw();
+    draw(performance.now());
     document.addEventListener("visibilitychange", onVis);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
@@ -1105,7 +1608,89 @@ function addBaseLayers(map: maplibregl.Map) {
     };
   }, [mapLoaded]);
 
-  /* ── SENTINEL SWATH — fade in on load and during demo SAR stage ── */
+  /* ── LIVE ENVIRONMENT — wind/current arrows slowly rotate ──── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    let t = 0;
+    const i = setInterval(() => {
+      if (document.hidden) return;
+      t += 1;
+      const wind = map.getSource("wind-points") as maplibregl.GeoJSONSource | undefined;
+      if (wind) {
+        const fc = (wind as any)._data ?? useCommandStore.getState().layers.weather;
+        if (fc) {
+          const data = (wind as any)._data;
+          if (data && data.features) {
+            const feats = (data.features as any[]).map((f, idx) => ({
+              ...f,
+              properties: {
+                ...f.properties,
+                bearing: (f.properties?.base ?? 59) + Math.sin(t / 1.4 + idx * 0.8) * 5,
+              },
+            }));
+            wind.setData({ type: "FeatureCollection", features: feats });
+          }
+        }
+      }
+      const cur = map.getSource("current-points") as maplibregl.GeoJSONSource | undefined;
+      if (cur) {
+        const data = (cur as any)._data;
+        if (data && data.features) {
+          const feats = (data.features as any[]).map((f, idx) => ({
+            ...f,
+            properties: {
+              ...f.properties,
+              bearing: (f.properties?.bearing ?? 119) + Math.sin(t / 1.1 + idx * 0.5) * 4,
+            },
+          }));
+          cur.setData({ type: "FeatureCollection", features: feats });
+        }
+      }
+    }, 1500);
+    return () => clearInterval(i);
+  }, [mapLoaded]);
+
+  /* ── IDLE BREATHING CAMERA — barely-there drone drift ──────── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) return;
+    let raf = 0;
+    let breathing = false;
+    let baseZoom = map.getZoom();
+    let selfMove = false;
+    const onMoveStart = () => {
+      if (!selfMove) breathing = false;
+    };
+    const loop = (t: number) => {
+      const s = useCommandStore.getState();
+      if (!document.hidden && !s.isDemoRunning) {
+        if (!breathing && !map.isMoving()) {
+          breathing = true;
+          baseZoom = map.getZoom();
+        }
+        if (breathing && !map.isMoving()) {
+          const breathe = Math.sin(t / 11000) * 0.045 + Math.sin(t / 47000) * 0.035;
+          selfMove = true;
+          map.jumpTo({ center: map.getCenter(), zoom: baseZoom + breathe });
+          selfMove = false;
+        }
+      } else {
+        breathing = false;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    map.on("movestart", onMoveStart);
+    raf = requestAnimationFrame(loop);
+    return () => {
+      map.off("movestart", onMoveStart);
+      cancelAnimationFrame(raf);
+    };
+  }, [mapLoaded]);
+
+  /* ── SENTINEL SWATH — fade on load / SAR stage ────────────── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !incident) return;
@@ -1128,7 +1713,7 @@ function addBaseLayers(map: maplibregl.Map) {
     return revealSwath(map, reduced);
   }, [demoStep, isDemoRunning, mapLoaded]);
 
-  /* ── SWATH LABEL — acquisition metadata chip ──────────────── */
+  /* ── SWATH LABEL ───────────────────────────────────────────── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !incident) return;
@@ -1164,7 +1749,7 @@ function addBaseLayers(map: maplibregl.Map) {
     };
   }, [incident, mapLoaded]);
 
-  /* ── SENTINEL ORBIT — satellite marker sweeps the swath during demo ── */
+  /* ── SENTINEL ORBIT ────────────────────────────────────────── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !incident) return;
@@ -1276,7 +1861,7 @@ function addBaseLayers(map: maplibregl.Map) {
     []
   );
 
-  /* ── SUSPECT VESSEL — amber halo + forced trail during demo stages 4+ ── */
+  /* ── SUSPECT VESSEL — rotating amber halo + confidence ring ── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
@@ -1293,8 +1878,10 @@ function addBaseLayers(map: maplibregl.Map) {
       el.className = "pointer-events-none";
       el.innerHTML = `
         <div class="relative flex items-center justify-center">
-          <span class="absolute h-9 w-9 rounded-full border border-amber/70 animate-ping opacity-60"></span>
-          <span class="absolute h-5 w-5 rounded-full border border-amber bg-amber/15"></span>
+          <span class="absolute h-11 w-11 rounded-full" style="animation:sd-halo-rot 9s linear infinite;background:conic-gradient(from 0deg, transparent 0%, rgba(224,134,61,0.8) 28%, transparent 56%)"></span>
+          <span class="absolute h-9 w-9 rounded-full border border-amber/40"></span>
+          <span class="absolute h-9 w-9 rounded-full border border-amber/15" style="animation:sd-swell 2.6s ease-out infinite"></span>
+          <span class="absolute h-5 w-5 rounded-full border border-amber/60 animate-ping opacity-60"></span>
           <span class="h-2.5 w-2.5 rounded-full bg-amber" style="box-shadow:0 0 10px rgba(224,134,61,0.9)"></span>
         </div>`;
       haloRef.current = new maplibregl.Marker({ element: el })
@@ -1312,20 +1899,21 @@ function addBaseLayers(map: maplibregl.Map) {
         map.setLayoutProperty(tl, "visibility", "none");
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoStep, isDemoRunning, hasVerified, mapLoaded, propVessels]);
 
-  /* ── STAGE-2 "SENTINEL-1 DETECTION EVENT" — cinematic timeline ── */
+  /* ── STAGE-2 SENTINEL DETECTION TIMELINE ───────────────────── */
   const stage2Active = isDemoRunning && demoStep === 2;
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !stage2Active || !incident) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const store = useCommandStore.getState();
+    const s = useCommandStore.getState();
     const t0 = performance.now();
     let raf = 0;
     let lastBucket = -1;
-    let oilOn = store.layers.oil;
+    let oilOn = s.layers.oil;
     let revealed = false;
     let zooped = false;
     let oilRamp = 0;
@@ -1354,17 +1942,20 @@ function addBaseLayers(map: maplibregl.Map) {
       if (oilOn && ms < 3000) {
         oilOn = false;
         useCommandStore.getState().setLayer("oil", false);
+        sheenRef.current?.setVisible(false);
       }
       if (ms >= 3000) {
         if (!oilOn) {
           oilOn = true;
           oilRamp = t;
           useCommandStore.getState().setLayer("oil", true);
+          sheenRef.current?.setVisible(true);
         }
         const k = Math.min(1, (t - oilRamp) / 1200);
-        setP("oil-fill", "fill-opacity", 0.26 * k);
+        setP("oil-fill", "fill-opacity", 0.1 * k);
         setP("oil-outline", "line-opacity", 0.75 * k);
         setP("oil-glow", "line-opacity", 0.35 * k);
+        sheenRef.current?.setAlpha(0.3 * k);
       }
 
       /* footprint: vanish at start, re-sweep before detection (t≈2s) */
@@ -1392,18 +1983,20 @@ function addBaseLayers(map: maplibregl.Map) {
     raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
-      const s = useCommandStore.getState();
-      s.setDetectionMs(null);
-      if (oilOn) s.setLayer("oil", true);
+      const st = useCommandStore.getState();
+      st.setDetectionMs(null);
+      if (oilOn) st.setLayer("oil", true);
+      sheenRef.current?.setVisible(true);
+      sheenRef.current?.setAlpha(0.3);
       setP("swath-fill", "fill-opacity", 0.1);
       setP("swath-outline", "line-opacity", 0.55);
-      setP("oil-fill", "fill-opacity", 0.26);
+      setP("oil-fill", "fill-opacity", 0.1);
       setP("oil-outline", "line-opacity", 0.75);
       setP("oil-glow", "line-opacity", 0.35);
     };
   }, [mapLoaded, stage2Active, incident]);
 
-  /* ── STAGE-2 SCENE MARKERS — radar pulse, swell ripple, confidence chip ── */
+  /* ── STAGE-2 SCENE MARKERS ─────────────────────────────────── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !incident) return;
@@ -1462,7 +2055,7 @@ function addBaseLayers(map: maplibregl.Map) {
     };
   }, [mapLoaded, stage2Active, incident]);
 
-  /* ── MISSION ALERTS — toast on each demo stage boundary ────── */
+  /* ── MISSION ALERTS TOAST ──────────────────────────────────── */
   useEffect(() => {
     let id: ReturnType<typeof setTimeout> | undefined;
     let id2: ReturnType<typeof setTimeout> | undefined;
@@ -1493,23 +2086,47 @@ function addBaseLayers(map: maplibregl.Map) {
     vis("eez-label", layers.eez);
     vis("lanes-glow", layers.shipping);
     vis("lanes-line", layers.shipping);
-    vis("oil-glow", layers.oil);
+    vis("lanes-arrows", layers.shipping);
+    vis("lanes-label", layers.shipping);
+    vis("oil-sar-dark", layers.oil);
     vis("oil-fill", layers.oil);
+    vis("oil-heat", layers.oil);
+    vis("oil-glow", layers.oil);
     vis("oil-outline", layers.oil);
-    vis("oil-pulse", layers.oil);
+    vis("oil-centroid", layers.oil);
     vis("oil-ring", layers.oil);
-    vis("oil-ripple", layers.oil);
+    sheenRef.current?.setVisible(layers.oil);
     vis("drift-path", layers.drift);
     vis("drift-origin", layers.drift);
+    vis("drift-ellipse", layers.drift);
+    vis("drift-h-dots", layers.drift);
+    vis("drift-h-labels", layers.drift);
+    vis("drift-origin-label", layers.drift);
     vis("density-heat", layers.ais);
     vis("wind-arrows", layers.weather);
     vis("weather-bands", layers.weather);
     vis("weather-outline", layers.weather);
     vis("weather-label", layers.weather);
+    vis("wave-heat", layers.weather);
     vis("current-arrows", layers.currents);
+    vis("bathy-lines", layers.bathy);
+    vis("bathy-labels", layers.bathy);
+    vis("shelf-rim", layers.bathy);
+    vis("depth-deep", layers.bathy);
+    vis("depth-mid", layers.bathy);
+    vis("depth-shelf", layers.bathy);
+    vis("coast-glow", layers.coast);
+    vis("coast-line", layers.coast);
+    vis("coast-sediment", layers.coast);
+    vis("coast-tidal", layers.coast);
+    vis("swath-fill", layers.sentinel);
+    vis("swath-outline", layers.sentinel);
+    vis("swath-core", layers.sentinel);
+    vis("sentinel-axis", layers.sentinel);
+    vis("sentinel-dir", layers.sentinel);
   }, [layers, mapLoaded]);
 
-  /* ── AIS VESSELS — realistic glyphs, hover trails, clustering ── */
+  /* ── AIS VESSELS — realistic silhouettes, trails, live fix ── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !map.getSource("graticule")) return;
@@ -1520,20 +2137,22 @@ function addBaseLayers(map: maplibregl.Map) {
       const selImo = s.selectedVesselImo;
       const onSel = onSelectVesselRef.current;
 
-      /* drop previous markers and their trail layers */
+      /* drop previous markers and their trail/proj layers */
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
+      markersByImoRef.current.clear();
       list.forEach((v) => {
-        const tl = `trail-${v.imo}`;
-        if (map.getLayer(tl)) map.removeLayer(tl);
-        if (map.getSource(tl)) map.removeSource(tl);
+        [`trail-${v.imo}`, `trail-dots-${v.imo}`, `proj-${v.imo}`, `gap-${v.imo}`].forEach((id) => {
+          if (map.getLayer(id)) map.removeLayer(id);
+          if (map.getSource(id)) map.removeSource(id);
+        });
       });
 
       if (!s.layers.ais || list.length === 0) return;
 
       const zoom = map.getZoom();
 
-      /* maritime traffic-density heatmap on the live AIS field */
+      /* live traffic-density field */
       const densitySrc = map.getSource("traffic-density") as maplibregl.GeoJSONSource | undefined;
       if (densitySrc) {
         densitySrc.setData({
@@ -1545,35 +2164,8 @@ function addBaseLayers(map: maplibregl.Map) {
           })),
         });
       }
-      if (!map.getLayer("density-heat") && !map.getSource("traffic-density")) {
-        map.addSource("traffic-density", {
-          type: "geojson",
-          data: { type: "FeatureCollection", features: [] },
-        });
-        map.addLayer({
-          id: "density-heat",
-          type: "heatmap",
-          source: "traffic-density",
-          paint: {
-            "heatmap-weight": ["get", "w"],
-            "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 6, 22, 9, 55],
-            "heatmap-intensity": 1,
-            "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 5.5, 0.3, 9.2, 0],
-            "heatmap-color": [
-              "interpolate",
-              ["linear"],
-              ["heatmap-density"],
-              0, "rgba(0,0,0,0)",
-              0.15, "rgba(56,189,248,0.28)",
-              0.45, "rgba(224,134,61,0.5)",
-              0.7, "rgba(239,140,60,0.6)",
-              1, "rgba(239,68,68,0.66)",
-            ],
-          },
-        });
-      }
 
-      /* zoomed out → spatial clustering */
+      /* zoomed out → spatial clusters */
       if (zoom < 7.2) {
         const CELL = 0.45;
         const buckets = new Map<string, CandidateVessel[]>();
@@ -1600,7 +2192,10 @@ function addBaseLayers(map: maplibregl.Map) {
                 <div style="transform: translateX(-50%) rotate(${v.heading}deg); transform-origin: 50% 100%;" class="pointer-events-none absolute bottom-[9px] left-1/2 h-[22px] w-px bg-current opacity-60">
                   <div class="absolute -top-[1px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[3px] border-b-[5px] border-x-transparent border-b-current"></div>
                 </div>
-                ${shipGlyph(v)}
+                <svg width="20" height="20" viewBox="0 0 24 24">
+                  <rect x="6.6" y="2.6" width="10.8" height="18.8" rx="5.4" fill="currentColor"/>
+                  <rect x="6.6" y="2.6" width="10.8" height="18.8" rx="5.4" fill="#050B11" opacity="0.32"/>
+                </svg>
               </div>`;
             el.addEventListener("click", () => {
               map.easeTo({ center: [v.longitude, v.latitude], zoom: Math.min(zoom + 2, 9.2), duration: 250 });
@@ -1624,11 +2219,11 @@ function addBaseLayers(map: maplibregl.Map) {
         return;
       }
 
-      /* individual markers + near-visible wakes, hover/selected 30-min trails */
+      /* individual vessels */
       list.forEach((v) => {
-        /* 30-minute trajectory: SOG(kt)/60 nm per min → SOG/120 ° over 30 min */
-        const N = 8;
-        const total = Math.max(0.01, v.speedOverGround / 120);
+        /* 30-minute AIS trail — backward-projected, timestamped */
+        const N = 9;
+        const total = Math.max(0.008, v.speedOverGround / 120);
         const a = ((v.courseOverGround + 180) * Math.PI) / 180;
         const kLat = Math.max(0.7, Math.cos((v.latitude * Math.PI) / 180));
         const pts: [number, number][] = [];
@@ -1640,6 +2235,8 @@ function addBaseLayers(map: maplibregl.Map) {
             v.latitude - Math.cos(a) * d + wiggle * 0.6,
           ]);
         }
+        const trailColor = v.attributionRank === 1 ? "#EF4444" : "#38BDF8";
+
         map.addSource(`trail-${v.imo}`, {
           type: "geojson",
           data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: pts } },
@@ -1648,14 +2245,98 @@ function addBaseLayers(map: maplibregl.Map) {
           id: `trail-${v.imo}`,
           type: "line",
           source: `trail-${v.imo}`,
-          layout: { visibility: selImo === v.imo ? "visible" : "none" },
+          layout: { visibility: "none" },
           paint: {
-            "line-color": v.attributionRank === 1 ? "#EF4444" : "#38BDF8",
-            "line-width": 1,
+            "line-color": trailColor,
+            "line-width": 1.1,
             "line-opacity": 0.5,
             "line-dasharray": [2, 2],
           },
         });
+
+        /* 5-minute time pips on the trail */
+        map.addSource(`trail-dots-${v.imo}`, {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: [0, 2, 4, 6, 8]
+              .filter((idx) => idx < pts.length)
+              .map((idx) => ({
+                type: "Feature",
+                properties: {},
+                geometry: { type: "Point", coordinates: pts[idx] },
+              })),
+          },
+        });
+        map.addLayer({
+          id: `trail-dots-${v.imo}`,
+          type: "circle",
+          source: `trail-dots-${v.imo}`,
+          layout: { visibility: "none" },
+          paint: {
+            "circle-radius": 2,
+            "circle-color": "#7DD3FC",
+            "circle-stroke-width": 0.5,
+            "circle-stroke-color": "#04121F",
+            "circle-opacity": 0.8,
+          },
+        });
+
+        /* 10-minute projected heading (dashed white) */
+        const hd = (v.heading * Math.PI) / 180;
+        const fwd: [number, number][] = [];
+        const projScale = Math.max(0.004, v.speedOverGround / 9000);
+        for (let i = 1; i <= 3; i++) {
+          fwd.push([
+            v.longitude + Math.sin(hd) * (i * projScale) / kLat,
+            v.latitude + Math.cos(hd) * (i * projScale),
+          ]);
+        }
+        map.addSource(`proj-${v.imo}`, {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "LineString", coordinates: [[v.longitude, v.latitude], ...fwd] },
+          },
+        });
+        map.addLayer({
+          id: `proj-${v.imo}`,
+          type: "line",
+          source: `proj-${v.imo}`,
+          layout: { visibility: "none" },
+          paint: {
+            "line-color": "#E8F0F3",
+            "line-width": 0.8,
+            "line-opacity": 0.45,
+            "line-dasharray": [0.5, 2.5],
+          },
+        });
+
+        /* AIS blackout segment — highlighted red when a transponder gap exists */
+        if (/gap/i.test(v.aisAnomaly)) {
+          const gs = Math.min(2, N - 3);
+          map.addSource(`gap-${v.imo}`, {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              properties: {},
+              geometry: { type: "LineString", coordinates: pts.slice(gs, gs + 3) },
+            },
+          });
+          map.addLayer({
+            id: `gap-${v.imo}`,
+            type: "line",
+            source: `gap-${v.imo}`,
+            layout: { visibility: "none" },
+            paint: {
+              "line-color": "#EF4444",
+              "line-width": 1.6,
+              "line-opacity": 0.75,
+              "line-dasharray": [3, 1],
+            },
+          });
+        }
 
         const el = document.createElement("div");
         const isTop = v.attributionRank === 1;
@@ -1668,22 +2349,24 @@ function addBaseLayers(map: maplibregl.Map) {
               ? "#22D3A7"
               : "#38BDF8";
         const dimmed = selImo && !isSelected ? "opacity-40" : "";
+        const mtr = shipMetrics(v);
 
         el.className = `group cursor-pointer select-none ${dimmed}`;
-        const wakeLen = 24 + Math.min(26, v.speedOverGround * 1.8);
+        const wakeLen = 20 + Math.min(30, v.speedOverGround * 2);
         el.innerHTML = `
           <div class="relative flex items-center justify-center">
-            <div style="transform: translateX(-50%) rotate(${v.heading + 180}deg); transform-origin:50% 50%; width:${wakeLen}px; height:11px; clip-path:polygon(0 100%, 100% 100%, 50% 0); background:linear-gradient(to top, rgba(56,189,248,0.34), rgba(56,189,248,0.06));" class="absolute left-1/2 top-1/2 pointer-events-none"></div>
-            <div style="transform: translateX(-50%) rotate(${v.heading}deg); transform-origin:50% 100%;" class="pointer-events-none absolute bottom-[9px] left-1/2 h-[22px] w-px bg-current opacity-60">
+            <div style="transform: translateX(-50%) rotate(${v.heading + 180}deg); transform-origin:50% 50%; width:${wakeLen}px; height:12px; clip-path:polygon(0 100%, 100% 100%, 50% 0); background:linear-gradient(to top, rgba(56,189,248,0.34), rgba(56,189,248,0.06));" class="absolute left-1/2 top-1/2 pointer-events-none opacity-80"></div>
+            <div style="transform: translateX(-50%) rotate(${v.courseOverGround}deg); transform-origin:50% 100%;" class="pointer-events-none absolute bottom-[9px] left-1/2 h-[22px] w-px bg-current opacity-60">
               <div class="absolute -top-[1px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[3px] border-b-[5px] border-x-transparent border-b-current"></div>
             </div>
-            <div style="color: ${color};" class="relative">
-              ${shipGlyph(v)}
+            <div style="transform:rotate(${v.heading}deg); filter:drop-shadow(0 0 2px rgba(2,8,14,0.9));" class="relative" data-ship>
+              ${shipSilhouette(v, color)}
             </div>
             <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden whitespace-nowrap rounded-md border border-line-active bg-panel px-2 py-1.5 font-mono text-[10px] leading-tight text-ink shadow-float group-hover:block">
               <div class="font-semibold text-aqua">${v.vesselName}</div>
               <div class="text-ink-dim mt-0.5">IMO ${v.imo} · ${v.speedOverGround.toFixed(1)} kn</div>
-              <div class="text-ink-faint">HDG ${v.heading}° · 09:42 UTC</div>
+              <div class="text-ink-faint">HDG ${v.heading}° · COG ${v.courseOverGround}° · ${v.lengthMeters ?? "—"}m</div>
+              <div class="text-ink-faint mt-0.5">${v.aisStatus}${v.aisAnomaly ? " · ⚠ " + v.aisAnomaly : ""}</div>
             </div>
             ${
               isTop
@@ -1693,21 +2376,33 @@ function addBaseLayers(map: maplibregl.Map) {
           </div>
         `;
 
-        el.addEventListener("mouseenter", () => {
+        const showDetail = () => {
           map.setLayoutProperty(`trail-${v.imo}`, "visibility", "visible");
-        });
-        el.addEventListener("mouseleave", () => {
+          map.setLayoutProperty(`trail-dots-${v.imo}`, "visibility", "visible");
+          map.setLayoutProperty(`proj-${v.imo}`, "visibility", "visible");
+          const gid = `gap-${v.imo}`;
+          if (map.getLayer(gid)) map.setLayoutProperty(gid, "visibility", "visible");
+        };
+        const hideDetail = () => {
           map.setLayoutProperty(`trail-${v.imo}`, "visibility", "none");
-        });
+          map.setLayoutProperty(`trail-dots-${v.imo}`, "visibility", "none");
+          map.setLayoutProperty(`proj-${v.imo}`, "visibility", "none");
+          const gid = `gap-${v.imo}`;
+          if (map.getLayer(gid)) map.setLayoutProperty(gid, "visibility", "none");
+        };
+        el.addEventListener("mouseenter", showDetail);
+        el.addEventListener("mouseleave", hideDetail);
         el.addEventListener("click", () => {
           useCommandStore.getState().setSelectedVesselImo(v.imo);
           onSel?.(v);
         });
+        if (isSelected) showDetail();
 
         const marker = new maplibregl.Marker({ element: el })
           .setLngLat([v.longitude, v.latitude])
           .addTo(map);
         markersRef.current.push(marker);
+        markersByImoRef.current.set(v.imo, marker);
       });
     };
 
@@ -1730,18 +2425,42 @@ function addBaseLayers(map: maplibregl.Map) {
       map.off("zoomend", build);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
+      markersByImoRef.current.clear();
       const s = useCommandStore.getState();
       (propVessels ?? s.candidateVessels).forEach((v) => {
-        const tl = `trail-${v.imo}`;
-        if (map.getLayer(tl)) map.removeLayer(tl);
-        if (map.getSource(tl)) map.removeSource(tl);
+        [`trail-${v.imo}`, `trail-dots-${v.imo}`, `proj-${v.imo}`, `gap-${v.imo}`].forEach((id) => {
+          if (map.getLayer(id)) map.removeLayer(id);
+          if (map.getSource(id)) map.removeSource(id);
+        });
       });
-      if (map.getLayer("density-heat")) map.removeLayer("density-heat");
-      if (map.getSource("traffic-density")) map.removeSource("traffic-density");
     };
   }, [mapLoaded, propVessels]);
 
-  /* ── OIL AREA LABEL + HEAT SHIMMER — zoom-gated DOM markers ── */
+  /* ── LIVE AIS — tiny position jitter so the fleet breathes ─── */
+  useEffect(() => {
+    if (!mapLoaded) return;
+    let t = 0;
+    const i = setInterval(() => {
+      if (document.hidden) return;
+      t += 1;
+      const s = useCommandStore.getState();
+      if (!s.layers.ais || !mapRef.current) return;
+      const zoom = mapRef.current.getZoom();
+      if (zoom < 7.2) return;
+      markersByImoRef.current.forEach((m, imo) => {
+        const v = s.candidateVessels.find((vv) => vv.imo === imo);
+        if (!v) return;
+        const amp = Math.min(8e-5, v.speedOverGround * 6e-6);
+        m.setLngLat([
+          v.longitude + Math.sin((t * 1.7 + imo) % 7) * amp,
+          v.latitude + Math.cos((t * 1.3 + imo * 2) % 5) * amp,
+        ]);
+      });
+    }, 2300);
+    return () => clearInterval(i);
+  }, [mapLoaded]);
+
+  /* ── OIL AREA LABEL + HEAT SHIMMER ─────────────────────────── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !incident) return;
@@ -1749,7 +2468,7 @@ function addBaseLayers(map: maplibregl.Map) {
     const el = document.createElement("div");
     el.className =
       "pointer-events-none flex items-center gap-1 whitespace-nowrap rounded-md bg-bg-1 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber ring-1 ring-line";
-    el.textContent = `${incident.spillGeometry.areaKm2} km²`;
+    el.textContent = `${incident.spillGeometry.areaKm2} km² · SHEEN`;
 
     const label = new maplibregl.Marker({ element: el, anchor: "top" })
       .setLngLat([
@@ -1758,7 +2477,6 @@ function addBaseLayers(map: maplibregl.Map) {
       ])
       .addTo(map);
 
-    /* heat shimmer — soft rising haze above the slick (reduced-motion: static) */
     const heat = document.createElement("div");
     heat.className = "sd-heat pointer-events-none";
     heat.style.cssText =
@@ -1789,23 +2507,26 @@ function addBaseLayers(map: maplibregl.Map) {
       map.off("zoom", sync);
       map.off("move", sync);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incident, mapLoaded, layers.oil]);
 
-  /* ── SMOOTH FLY TO INCIDENT ON SELECTION ───────────────────── */
+  /* ── CINEMATIC FLY-TO ON INCIDENT SELECTION ────────────────── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !incident) return;
     const c = incident.spillGeometry.centroid;
     const cur = map.getCenter();
     const far = Math.hypot(cur.lng - c.longitude, cur.lat - c.latitude);
-    if (far > 0.02) {
+    if (far > 0.02 && !isDemoRunning) {
       map.flyTo({
         center: [c.longitude, c.latitude],
-        zoom: 8,
-        duration: 250,
+        zoom: Math.max(8, map.getZoom()),
+        duration: 1400,
         essential: true,
+        curve: 1.4,
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incident, mapLoaded]);
 
   /* stage-2 detection event overlay state */
@@ -1842,34 +2563,54 @@ function addBaseLayers(map: maplibregl.Map) {
   const reset = () =>
     mapRef.current?.flyTo({ center: [69.112, 21.845], zoom: 8, duration: 200 });
 
+  /* sea-state telemetry derived from the drift vector field */
+  const lastDrift = driftLine[driftLine.length - 1];
+  const windKn = lastDrift ? (lastDrift.windSpeed * 1.944).toFixed(0) : "12";
+  const curKn = lastDrift ? (lastDrift.currentSpeed * 1.944).toFixed(1) : "1.0";
+  const seaState = lastDrift
+    ? lastDrift.windSpeed >= 7
+      ? "3 · MODERATE"
+      : lastDrift.windSpeed >= 4.5
+        ? "2 · SLIGHT"
+        : "1 · CALM"
+    : "2 · SLIGHT";
+
   return (
     <div
       className={`relative h-full w-full overflow-hidden bg-bg-0 ${interactive ? "select-none" : ""}`}
     >
       <div ref={containerRef} className="absolute inset-0 h-full w-full" />
 
-      {/* Ocean sheen — slow ambient shimmer over the water (reduced-motion: static) */}
+      {/* ── CINEMATIC GRADE — photoreal | satellite, not Google ── */}
       <div
-        className="sd-shimmer pointer-events-none absolute inset-0 z-[1] mix-blend-soft-light"
-        style={{ background: "radial-gradient(60% 50% at 30% 30%, rgba(98,190,235,0.16), transparent 70%), radial-gradient(50% 40% at 75% 65%, rgba(90,180,230,0.12), transparent 70%)", animation: "sd-shimmer 22s ease-in-out infinite" }}
+        className="pointer-events-none absolute inset-0 z-[1] mix-blend-soft-light"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(30,80,120,0.14) 0%, rgba(10,34,52,0.06) 30%, rgba(4,18,30,0.1) 100%), radial-gradient(95% 65% at 30% 80%, rgba(28,110,140,0.18), transparent 62%)",
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 z-[1] mix-blend-multiply"
+        style={{ background: "rgba(7,26,45,0.42)" }}
+      />
+      {/* rim light — cyan atmospheric horizon */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[1] mix-blend-screen"
+        style={{
+          background:
+            "radial-gradient(140% 90% at 50% -12%, rgba(86,190,240,0.10), transparent 55%), radial-gradient(90% 55% at 88% 62%, rgba(40,120,170,0.08), transparent 60%)",
+        }}
+      />
+      {/* deep-ocean vignette */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[1]"
+        style={{ background: "radial-gradient(120% 100% at 50% 40%, transparent 55%, rgba(3,8,12,0.55) 100%)" }}
       />
 
-      {/* Drifting current particles (tiny, above tint, below labels) */}
+      {/* Drifting current particles + caustics */}
       <canvas
         ref={particlesRef}
         className="pointer-events-none absolute inset-0 z-[2] h-full w-full"
-      />
-
-      {/* Night-grade cinematic grade — navy matte over satellite imagery */}
-      <div
-        className="pointer-events-none absolute inset-0 z-[1]"
-        style={{ background: "rgba(8,28,48,0.5)", mixBlendMode: "multiply" }}
-      />
-
-      {/* Deep-ocean vignette + atmospheric haze over the water */}
-      <div
-        className="pointer-events-none absolute inset-0 z-[1]"
-        style={{ background: "radial-gradient(120% 100% at 50% 40%, transparent 55%, rgba(3,8,12,0.55) 100%), radial-gradient(80% 55% at 50% 0%, rgba(96,190,240,0.07), transparent 70%)" }}
       />
 
       <style>{`@keyframes sd-pop{0%{opacity:0;transform:translate(-50%,-6px)}100%{opacity:1;transform:translate(-50%,0)}}
@@ -1877,11 +2618,12 @@ function addBaseLayers(map: maplibregl.Map) {
 @keyframes sd-scan{0%{top:-3%;opacity:0}10%{opacity:.8}90%{opacity:.35}100%{top:97%;opacity:0}}
 @keyframes sd-ring{0%{transform:scale(.35);opacity:.9}100%{transform:scale(2.6);opacity:0}}
 @keyframes sd-swell{0%{transform:scale(.2);opacity:.9}100%{transform:scale(3);opacity:0}}
+@keyframes sd-halo-rot{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes sd-heat{0%{transform:translate(-50%,-50%) scale(1) rotate(0deg)}33%{transform:translate(-50%,-54%) scale(1.07) rotate(1.2deg)}66%{transform:translate(-50%,-46%) scale(.96) rotate(-1.2deg)}100%{transform:translate(-50%,-50%) scale(1) rotate(0deg)}}
 @keyframes sd-alert{0%{opacity:0;transform:translate(-50%,-8px)}12%{opacity:1;transform:translate(-50%,0)}82%{opacity:1}100%{opacity:0;transform:translate(-50%,-4px)}}
 @keyframes sd-draw{from{stroke-dashoffset:600}to{stroke-dashoffset:0}}
-@keyframes sd-shimmer{0%{transform:translate(-8%,-6%) scale(1) rotate(0deg)}50%{transform:translate(8%,6%) scale(1.15) rotate(4deg)}100%{transform:translate(-8%,-6%) scale(1) rotate(0deg)}}
-@media(prefers-reduced-motion:reduce){.sd-shimmer{animation:none!important}}
+.sd-port-popup .maplibregl-popup-content{padding:0;background:transparent;border-radius:8px}
+@media(prefers-reduced-motion:reduce){.sd-heat{animation:none!important}}
 .maplibregl-marker{z-index:30!important}`}</style>
 
       {detecting && (
@@ -1968,19 +2710,25 @@ function addBaseLayers(map: maplibregl.Map) {
         </div>
       )}
 
-      {/* Satellite orbit HUD */}
+      {/* ── SATELLITE TELEMETRY HUD — glass tactical panel ─────── */}
       {incident && (
-        <div className="pointer-events-none absolute right-3 top-[118px] z-10 w-44 rounded-lg bg-bg-1/95 p-2.5 font-mono text-[10px] leading-relaxed ring-1 ring-line shadow-float">
+        <div className="pointer-events-none absolute right-3 top-[118px] z-10 w-48 rounded-lg bg-bg-1/95 p-2.5 font-mono text-[10px] leading-relaxed ring-1 ring-line shadow-float">
           <div className="flex items-center gap-1.5 text-aqua">
-            <span className="h-1.5 w-1.5 rounded-full bg-aqua animate-pulse" />
+            <Satellite className="h-3.5 w-3.5" />
             <span className="font-semibold tracking-wide">SENTINEL-1A</span>
+            <span className="ml-auto tnum text-ink-faint">{clockUtc}</span>
           </div>
           <div className="mt-1.5 space-y-1 text-ink-dim">
-            <div className="flex justify-between"><span className="text-ink-faint">ORBIT</span><span className="tnum text-ink">#{incident.sarMetadata.relativeOrbit}</span></div>
-            <div className="flex justify-between"><span className="text-ink-faint">ALT</span><span className="tnum text-ink">693 KM</span></div>
-            <div className="flex justify-between"><span className="text-ink-faint">INCIDENCE</span><span className="tnum text-ink">38.2°</span></div>
-            <div className="flex justify-between"><span className="text-ink-faint">BAND</span><span className="text-ink">C · IW</span></div>
-            <div className="flex justify-between"><span className="text-ink-faint">ACQ</span><span className="tnum text-ink">{incident.sarMetadata.acquisitionUtc.substring(11, 19)}Z</span></div>
+            <div className="flex justify-between"><span className="text-ink-faint">ORBIT</span><span className="tnum text-ink">#{incident.sarMetadata.relativeOrbit} · 693 KM</span></div>
+            <div className="flex justify-between"><span className="text-ink-faint">INCIDENCE</span><span className="tnum text-ink">{incident.sarMetadata.incidenceAngleDeg.toFixed(1)}°</span></div>
+            <div className="flex justify-between"><span className="text-ink-faint">POLARIZATION</span><span className="text-ink">{incident.sarMetadata.polarization.join(" + ")}</span></div>
+            <div className="flex justify-between"><span className="text-ink-faint">RESOLUTION</span><span className="tnum text-ink">{incident.sarMetadata.resolutionMeters ?? 10} M</span></div>
+            <div className="flex justify-between"><span className="text-ink-faint">ACQUISITION</span><span className="tnum text-ink">{incident.sarMetadata.acquisitionUtc.substring(11, 19)}Z</span></div>
+          </div>
+          <div className="mt-2 border-t border-line pt-1.5">
+            <div className="flex justify-between"><span className="text-ink-faint">SEA STATE</span><span className="text-teal">{seaState}</span></div>
+            <div className="flex justify-between"><span className="text-ink-faint">WIND</span><span className="tnum text-ink">{windKn} KN · 252°</span></div>
+            <div className="flex justify-between"><span className="text-ink-faint">CURRENT</span><span className="tnum text-ink">{curKn} KN · 235°</span></div>
           </div>
         </div>
       )}
