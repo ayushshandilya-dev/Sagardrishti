@@ -142,6 +142,7 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ incident, 
                 strokeWidth="7"
                 strokeLinecap="round"
                 strokeDasharray={C}
+                initial={{ strokeDashoffset: C }}
                 animate={{ strokeDashoffset: C * (1 - confFrac) }}
                 transition={{ type: "spring", stiffness: 60, damping: 20 }}
               />
