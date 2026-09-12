@@ -57,6 +57,7 @@ export const TopBar: React.FC = () => {
 
   const runDemo = () => {
     startDemo();
+    router.prefetch("/sar-investigation");
     router.push("/operations");
     /* 1 → 2: Sentinel-1 Detection Event runs ON the Operations map (≈7s) */
     setTimeout(() => {
@@ -64,8 +65,9 @@ export const TopBar: React.FC = () => {
     }, 4500);
     setTimeout(() => {
       useCommandStore.setState({ demoStep: 3 });
-      router.push("/sar/SD-2026-00421");
+      router.push("/sar-investigation");
     }, 11900);
+    /* stage 3 dwells on the SAR investigation workstation */
     setTimeout(() => {
       useCommandStore.setState((st) => ({
         demoStep: 4,
@@ -73,7 +75,7 @@ export const TopBar: React.FC = () => {
         layers: { ...st.layers, drift: true },
       }));
       router.push("/drift");
-    }, 17000);
+    }, 28000);
     setTimeout(() => {
       useCommandStore.setState((st) => ({
         demoStep: 5,
@@ -81,20 +83,20 @@ export const TopBar: React.FC = () => {
         layers: { ...st.layers, drift: true },
       }));
       router.push("/attribution");
-    }, 22500);
+    }, 33000);
     setTimeout(() => {
       useCommandStore.setState({ demoStep: 6 });
       router.push("/vessels/9123456");
-    }, 27500);
+    }, 38000);
     setTimeout(() => {
       useCommandStore.setState({ demoStep: 7, hasVerified: true });
       router.push("/evidence");
-    }, 32500);
+    }, 43000);
     setTimeout(() => {
       useCommandStore.getState().setLayer("drift", false);
       resetDemo();
       router.push("/dossier");
-    }, 38500);
+    }, 49000);
   };
 
   return (
