@@ -92,6 +92,9 @@ const DEFAULT_LAYERS: MapLayersState = {
   drift: false,
   weather: true,
   currents: true,
+  bathy: true,
+  coast: true,
+  sentinel: true,
 };
 
 export const useCommandStore = create<CommandStore>((set, get) => ({
