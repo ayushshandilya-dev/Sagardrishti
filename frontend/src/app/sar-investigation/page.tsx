@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -10,7 +10,8 @@ import { useInvestigation, TIMELINE } from "@/components/sar-investigation/useIn
 import { SentinelMap } from "@/components/sar-investigation/SentinelMap";
 import { ProductChip } from "@/components/sar-investigation/ProductChip";
 import { EvidenceInspector } from "@/components/sar-investigation/EvidenceInspector";
-import { TimelineDock } from "@/components/sar-investigation/TimelineDock";import {
+import { TimelineDock } from "@/components/sar-investigation/TimelineDock";
+import { ProcessingLog } from "@/components/sar-investigation/ProcessingLog";import {
   ArrowLeft,
   ShieldCheck,
   Layers3,
@@ -89,10 +90,10 @@ export default function SarInvestigationPage() {
                   : "bg-amber/12 text-amber ring-1 ring-amber/40"
               )}
             >
-              {inv.state.confidence > 0 ? `${inv.state.confidence.toFixed(1)}%` : "—"} CONFIDENCE
+              {inv.state.confidence > 0 ? `${inv.state.confidence.toFixed(1)}%` : "â€”"} CONFIDENCE
             </span>
             <span className="font-mono text-[9px] text-ink-faint">
-              SENTINEL-1A · ORBIT {incident.sarMetadata.relativeOrbit} · {incident.spillGeometry.areaKm2} km²
+              SENTINEL-1A Â· ORBIT {incident.sarMetadata.relativeOrbit} Â· {incident.spillGeometry.areaKm2} kmÂ²
             </span>
           </div>
         </div>
@@ -162,12 +163,12 @@ export default function SarInvestigationPage() {
           <ProcessingLog
             incident={incident}
             inv={inv.state}
-            live={inv.playing}
+            live={inv.state.playing}
             phase={inv.state.phase}
             className="absolute bottom-3 left-3 z-20"
           />
 
-          {/* floating controls bar — handled by SentinelMap/VolumeScene internally */}
+          {/* floating controls bar â€” handled by SentinelMap/VolumeScene internally */}
         </div>
 
         {/* evidence inspector */}
