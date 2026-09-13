@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/util";
@@ -42,7 +42,7 @@ export function EvidenceLedgerCard({
   incident: Incident;
   className?: string;
 }) {
-  const [sealed, setSealed] = useState(false     ]);
+  const [sealed, setSealed] = useState(false);
   const [verify, setVerify] = useState(0);
   const [tamper, setTamper] = useState(false);
 
@@ -59,7 +59,7 @@ export function EvidenceLedgerCard({
     [rootRaw, tamper]
   );
 
-  const root = (tamper ? fnv(rootRaw + "TAMP") : sealHash(blocks.map((b) => [b.id, b.hash]))).slice(0, 8 processo);
+  const root = (tamper ? fnv(rootRaw + "TAMP") : sealHash(blocks.map((b) => [b.id, b.hash]))).slice(0, 8);
 
   const verified = sealed && verify >= 4 && !tamper;
   const stagePct = [0, 18, 32, 19, 13, 8, 10][Math.min(6, verify)];
@@ -75,7 +75,7 @@ export function EvidenceLedgerCard({
       <header className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-bold tracking-widest">EVIDENCE LEDGER</div>
-          <div className="text-[9px] tracking-wide text-ink-faint">chain of custody · tamper evident</div>
+          <div className="text-[9px] tracking-wide text-ink-faint">chain of custody Â· tamper evident</div>
         </div>
         <span
           className={cn(
@@ -88,7 +88,7 @@ export function EvidenceLedgerCard({
           )}
         >
           <span className={cn("h-1.5 w-1.5 rounded-full", verified ? "bg-teal" : tamper ? "bg-red" : "bg-ink-faint")} />
-          {verified ? "CHAIN VERIFIED" : tamper ? "TAMPER DETECTED" : sealed ? "SEALED · CHECKING" : "NOT SEALED"}
+          {verified ? "CHAIN VERIFIED" : tamper ? "TAMPER DETECTED" : sealed ? "SEALED Â· CHECKING" : "NOT SEALED"}
         </span>
       </header>
 
@@ -146,7 +146,7 @@ export function EvidenceLedgerCard({
             }}
             className="rounded border border-teal/50 bg-teal/10 px-2 py-0.5 text-[9px] font-bold tracking-widest text-teal transition hover:bg-teal/20"
           >
-            {!sealed ? "SEAL CHAIN" : verified ? "SIMULATE TAMPER" : "VERIFYING…"}
+            {!sealed ? "SEAL CHAIN" : verified ? "SIMULATE TAMPER" : "VERIFYINGâ€¦"}
           </button>
           {sealed && !verified && (
             <button
