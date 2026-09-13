@@ -12,6 +12,7 @@ import {
   Link2,
   FileText,
   Settings,
+  Sparkles,
 } from "lucide-react";
 import { useCommandStore } from "@/lib/store";
 
@@ -49,6 +50,7 @@ export const CommandRail: React.FC = () => {
     },
     { key: "evidence", href: "/evidence", label: "Evidence Ledger", icon: Link2, scope: "evidence" },
     { key: "dossier", href: "/dossier", label: "Legal Dossier", icon: FileText, scope: "dossier" },
+    { key: "explainability", href: "/explainability", label: "Explainability Gallery", icon: Sparkles, scope: "explainability" },
   ];
 
   const isActive = (item: RailItem) => {
