@@ -6,11 +6,12 @@ import { cn } from "@/lib/util";
 import { CandidateVessel, RiskBadge } from "@/lib/types";
 import { Trophy, Ship, Timer, Target, Navigation } from "lucide-react";
 import { SourceTag, sourceLabel } from "@/components/attribution/SourceTag";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 
-const BADGE_STYLE: Record<RiskBadge, string> = {
-  PRIMARY: "bg-red/10 text-red ring-red/40",
-  WATCH: "bg-amber/10 text-amber ring-amber/40",
-  CLEAR: "bg-ink-faint/8 text-ink-faint ring-line",
+const BADGE_TONE: Record<RiskBadge, "crit" | "warn" | "neutral"> = {
+  PRIMARY: "crit",
+  WATCH: "warn",
+  CLEAR: "neutral",
 };
 
 export function ScoreBar({ v }: { v: number }) {
@@ -50,13 +51,11 @@ export const AttributionRanking: React.FC<{ vessels: CandidateVessel[] }> = ({ v
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-xs font-semibold text-ink">{v.vesselName}</span>
+                  <span className="truncate text-title-sm font-semibold text-ink">{v.vesselName}</span>
                   <SourceTag source={sourceLabel(v)} />
-                  <span className={cn("shrink-0 rounded px-1.5 py-px font-mono text-[9px] font-semibold ring-1", BADGE_STYLE[v.riskBadge])}>
-                    {v.riskBadge}
-                  </span>
+                  <StatusBadge label={v.riskBadge} tone={BADGE_TONE[v.riskBadge]} dot={false} />
                 </div>
-                <div className="mt-0.5 flex items-center gap-2 font-mono text-[9px] text-ink-faint">
+                <div className="mt-0.5 flex items-center gap-2 text-telemetry-sm text-ink-faint">
                   <span className="tnum">IMO {v.imo}</span>
                   <span>·</span>
                   <span>{v.flag}</span>
@@ -74,20 +73,20 @@ export const AttributionRanking: React.FC<{ vessels: CandidateVessel[] }> = ({ v
 
             {/* sub-metrics */}
             <div className="mt-2 grid grid-cols-4 gap-1.5">
-              <span className="flex items-center gap-1 text-[9px] text-ink-dim">
+              <span className="flex items-center gap-1 text-telemetry-sm text-ink-dim">
                 <Navigation className="h-3 w-3 text-ink-faint" />
                 {(v.closestApproachMeters / 1000).toFixed(1)} km
               </span>
-              <span className="flex items-center gap-1 text-[9px] text-ink-dim">
+              <span className="flex items-center gap-1 text-telemetry-sm text-ink-dim">
                 <Target className="h-3 w-3 text-ink-faint" />
                 {v.headingAlignmentDeg}° off
               </span>
-              <span className="flex items-center gap-1 text-[9px] text-ink-dim">
+              <span className="flex items-center gap-1 text-telemetry-sm text-ink-dim">
                 <Timer className="h-3 w-3 text-ink-faint" />
                 {v.timeOverlapMinutes} min
               </span>
               <span className={cn(
-                "flex items-center gap-1 text-[9px]",
+                "flex items-center gap-1 text-telemetry-sm",
                 v.aisAnomaly === "None detected" ? "text-ink-faint" : "text-amber"
               )}>
                 <Ship className="h-3 w-3" />

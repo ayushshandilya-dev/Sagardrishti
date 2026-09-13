@@ -5,6 +5,9 @@ import { useCommandStore } from "@/lib/store";
 import { MOCK_SAT_PASSES } from "@/lib/mockData";
 import { cn } from "@/lib/util";
 import { MapLayersState, SatPass, AlertSeverity } from "@/lib/types";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
   Layers,
   Radar,
@@ -68,31 +71,28 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto flex h-full max-w-5xl flex-col gap-3 overflow-y-auto p-4">
-      <div>
-        <div className="flex items-center gap-2">
-          <h1 className="text-base font-semibold tracking-tight text-ink">Settings & layers</h1>
-          <span className="rounded bg-bg-1 px-2 py-0.5 font-mono text-[10px] text-ink-faint ring-1 ring-line">
-            COP CONFIGURATION
-          </span>
-        </div>
-        <p className="meta mt-0.5">Layer stack, data source health and operational configuration</p>
-      </div>
+      <PageHeader
+        title="Settings & layers"
+        badge={{ label: "COP CONFIGURATION", tone: "neutral" }}
+        subtitle="Layer stack, data source health and operational configuration"
+      />
 
       <div className="grid grid-cols-2 gap-3">
         {/* layers */}
-        <div className="rounded-panel border border-line bg-bg-1 px-4 py-3.5">
-          <div className="mb-2 flex items-center justify-between border-b border-line pb-2">
-            <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
-              <Layers className="h-3.5 w-3.5 text-aqua" />
-              Map layers
-            </span>
+        <Panel
+          title="Map layers"
+          icon={Layers}
+          tone="info"
+          toolbar={
             <button
               onClick={resetLayers}
               className="font-mono text-[9px] text-ink-faint transition-colors duration-150 hover:text-ink"
             >
               RESET
             </button>
-          </div>
+          }
+          bodyClassName="px-4 py-2"
+        >
           <div className="flex flex-col">
             {LAYER_META.map(({ key, label, desc, dot }) => (
               <div
@@ -101,45 +101,47 @@ export default function SettingsPage() {
               >
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium text-ink">{label}</div>
-                  <div className="truncate text-[9px] text-ink-faint">{desc}</div>
+                  <div className="text-body-sm font-medium text-ink">{label}</div>
+                  <div className="truncate text-telemetry-sm text-ink-faint">{desc}</div>
                 </div>
                 <Toggle on={layers[key]} onClick={() => setLayer(key, !layers[key])} />
               </div>
             ))}
           </div>
-        </div>
+        </Panel>
 
         {/* data sources */}
         <div className="flex flex-col gap-3">
-          <div className="rounded-panel border border-line bg-bg-1 px-4 py-3.5">
-            <div className="mb-2 flex items-center gap-1.5 border-b border-line pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
-              <Satellite className="h-3.5 w-3.5 text-aqua" />
-              Satellite pass schedule
-            </div>
+          <Panel
+            title="Satellite pass schedule"
+            icon={Satellite}
+            tone="info"
+            bodyClassName="px-4 py-2"
+          >
             <div className="flex flex-col">
               {passes.map((p) => (
                 <div key={p.id} className="flex items-center gap-2 border-b border-dashed border-line/60 py-1.5 last:border-0">
-                  <span className="w-24 shrink-0 font-mono text-[10px] text-ink">{p.mission}</span>
+                  <span className="w-24 shrink-0 text-telemetry-sm text-ink">{p.mission}</span>
                   <span className="rounded bg-bg-0 px-1.5 py-px font-mono text-[8px] text-ink-faint ring-1 ring-line">
                     {p.mode}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-right font-mono text-[9px] text-ink-faint tnum">
+                  <span className="min-w-0 flex-1 truncate text-right text-telemetry-sm text-ink-faint tnum">
                     {p.nextUtc} UTC
                   </span>
-                  <span className={cn("font-mono text-[9px]", p.operational ? "text-green" : "text-amber")}>
+                  <span className={cn("text-telemetry-sm", p.operational ? "text-green" : "text-amber")}>
                     {p.operational ? "GO" : "STANDBY"} · T−{p.etaMinutes} m
                   </span>
                 </div>
               ))}
             </div>
-          </div>
+          </Panel>
 
-          <div className="rounded-panel border border-line bg-bg-1 px-4 py-3.5">
-            <div className="mb-2 flex items-center gap-1.5 border-b border-line pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
-              <Radio className="h-3.5 w-3.5 text-teal" />
-              Data source health
-            </div>
+          <Panel
+            title="Data source health"
+            icon={Radio}
+            tone="ok"
+            bodyClassName="px-4 py-2"
+          >
             <div className="flex flex-col">
               {DATA_SOURCES.map((s) => (
                 <div key={s.name} className="flex items-center gap-2 border-b border-dashed border-line/60 py-2 last:border-0">
@@ -153,26 +155,23 @@ export default function SettingsPage() {
                     )}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs font-medium text-ink">{s.name}</div>
-                    <div className="text-[9px] text-ink-faint">{s.sub}</div>
+                    <div className="text-body-sm font-medium text-ink">{s.name}</div>
+                    <div className="text-telemetry-sm text-ink-faint">{s.sub}</div>
                   </div>
-                  <span className="rounded bg-green/8 px-1.5 py-0.5 font-mono text-[8px] font-semibold text-green ring-1 ring-green/25">
-                    {s.latency}
-                  </span>
+                  <StatusBadge label={s.latency} tone="ok" dot={false} />
                 </div>
               ))}
             </div>
-          </div>
+          </Panel>
         </div>
       </div>
 
       {/* alerts */}
-      <div className="rounded-panel border border-line bg-bg-1 px-4 py-3.5">
-        <div className="mb-2 flex items-center justify-between border-b border-line pb-2">
-          <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
-            <Bell className="h-3.5 w-3.5 text-amber" />
-            Operational alerts
-          </span>
+      <Panel
+        title="Operational alerts"
+        icon={Bell}
+        tone="warn"
+        toolbar={
           <div className="flex items-center gap-1">
             {(["ALL", ...SEV_OPTS] as const).map((f) => (
               <button
@@ -187,7 +186,9 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
-        </div>
+        }
+        bodyClassName="px-4 py-3"
+      >
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
           {alerts.map((a) => {
             const sev =
@@ -202,27 +203,29 @@ export default function SettingsPage() {
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 font-mono text-[9px] font-semibold" style={{ color: sev }}>
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: sev }} />
-                    {a.severity}
-                  </span>
+                  <StatusBadge
+                    label={a.severity}
+                    tone={a.severity === "CRITICAL" ? "crit" : a.severity === "SUSPICIOUS" ? "warn" : "ok"}
+                    dot={false}
+                  />
                   <span className="font-mono text-[8px] text-ink-faint tnum">{a.timestamp}</span>
                 </div>
-                <div className="mt-1 text-[11px] font-medium text-ink">{a.title}</div>
-                <div className="mt-0.5 text-[9px] leading-relaxed text-ink-faint">{a.description}</div>
+                <div className="mt-1 text-body-sm font-medium text-ink">{a.title}</div>
+                <div className="mt-0.5 text-telemetry-sm leading-relaxed text-ink-faint">{a.description}</div>
                 <div className="mt-1 font-mono text-[8px] text-ink-faint">{a.location}</div>
               </button>
             );
           })}
         </div>
-      </div>
+      </Panel>
 
       {/* keybindings */}
-      <div className="rounded-panel border border-line bg-bg-1 px-4 py-3.5">
-        <div className="mb-2 flex items-center gap-1.5 border-b border-line pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
-          <Keyboard className="h-3.5 w-3.5 text-aqua" />
-          Keybindings
-        </div>
+      <Panel
+        title="Keybindings"
+        icon={Keyboard}
+        tone="info"
+        bodyClassName="px-4 pb-4 pt-2"
+      >
         <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
           {[
             ["1–7", "Layer toggles"],
@@ -233,11 +236,11 @@ export default function SettingsPage() {
           ].map(([k, v]) => (
             <div key={k} className="rounded bg-bg-0 px-2.5 py-1.5 ring-1 ring-line">
               <div className="font-mono text-[10px] font-semibold text-aqua">{k}</div>
-              <div className="text-[9px] text-ink-faint">{v}</div>
+              <div className="text-telemetry-sm text-ink-faint">{v}</div>
             </div>
           ))}
         </div>
-      </div>
+      </Panel>
     </div>
   );
 }

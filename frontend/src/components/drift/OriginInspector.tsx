@@ -3,11 +3,12 @@
 import React from "react";
 import { useCommandStore } from "@/lib/store";
 import { Crosshair, Waves, Wind, Compass, Gauge, Timer } from "lucide-react";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 
-const rows =
-  "flex items-center justify-between gap-2 border-b border-line py-2 last:border-0";
-const lbl = "meta shrink-0";
+const rows = "flex items-center justify-between gap-2 border-b border-line py-2 last:border-0";
+const lbl = "shrink-0 text-label-caps text-ink-faint";
 const mono = "font-mono text-[11px] font-medium text-ink tnum";
+const monoDim = "font-mono text-[11px] text-ink-dim tnum";
 
 export const OriginInspector: React.FC = () => {
   const { driftResult } = useCommandStore();
@@ -24,12 +25,11 @@ export const OriginInspector: React.FC = () => {
           <Crosshair className="h-3.5 w-3.5 text-aqua" />
           Reconstructed origin
         </span>
-        <span
-          className="rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold text-teal ring-1 ring-teal/30"
+        <StatusBadge
+          label={`RK4 · ${(o.rk4Confidence * 100).toFixed(0)}%`}
+          tone="ok"
           title="2nd-order Runge–Kutta backtrack"
-        >
-          RK4 · {(o.rk4Confidence * 100).toFixed(0)}%
-        </span>
+        />
       </div>
 
       <div className="px-3.5">
@@ -41,13 +41,13 @@ export const OriginInspector: React.FC = () => {
         </div>
         <div className={rows}>
           <span className={lbl}>Discharge window</span>
-          <span className="font-mono text-[11px] text-ink-dim tnum">
+          <span className={monoDim}>
             {o.timestampUtc} ± {Math.round(o.uncertaintyRadiusMeters / 1000)} km
           </span>
         </div>
         <div className={rows}>
           <span className={lbl}>Recovered path</span>
-          <span className="font-mono text-[11px] text-ink-dim tnum">
+          <span className={monoDim}>
             {obs.latitude.toFixed(3)}°N, {obs.longitude.toFixed(3)}°E ← {o.latitude.toFixed(3)}°N, {o.longitude.toFixed(3)}°E
           </span>
         </div>
@@ -56,7 +56,7 @@ export const OriginInspector: React.FC = () => {
           <span className={mono}>{o.hoursBeforeObservation} h</span>
         </div>
 
-        <div className="flex items-center gap-1 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
+        <div className="flex items-center gap-1 py-2 text-label-caps text-ink-dim">
           <Waves className="h-3 w-3 text-aqua" />
           Forcing at origin
         </div>
@@ -76,12 +76,12 @@ export const OriginInspector: React.FC = () => {
         </div>
         <div className={rows}>
           <span className={lbl}>Uncertainty</span>
-          <span className="mono">σ {o.uncertaintyRadiusMeters / 1000} km</span>
+          <span className={mono}>σ {o.uncertaintyRadiusMeters / 1000} km</span>
         </div>
 
         <div className="border-t border-line py-2">
-          <div className="meta-label mb-1">Model provenance</div>
-          <div className="flex flex-col gap-0.5 text-[10px] text-ink-dim">
+          <div className="mb-1 text-label-caps text-ink-faint">Model provenance</div>
+          <div className="flex flex-col gap-0.5 text-telemetry-sm text-ink-dim">
             <span className="flex items-center gap-1"><Gauge className="h-3 w-3 text-aqua" /> {d.provenance.leewayFactor}</span>
             <span className="flex items-center gap-1"><Timer className="h-3 w-3 text-aqua" /> RK4 step {d.provenance.stepSeconds} s · {d.provenance.currentSource} / {d.provenance.windSource}</span>
           </div>

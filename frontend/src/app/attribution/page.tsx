@@ -8,6 +8,7 @@ import { LayerChips } from "@/components/map/LayerChips";
 import { AttributionRanking } from "@/components/attribution/AttributionRanking";
 import { VesselInspector } from "@/components/attribution/VesselInspector";
 import { Explainability } from "@/components/attribution/Explainability";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ArrowRight } from "lucide-react";
 
 export default function VesselAttributionPage() {
@@ -17,19 +18,12 @@ export default function VesselAttributionPage() {
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 pb-2">
-      <div className="flex items-center justify-between px-0.5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold tracking-tight text-ink">Vessel attribution</h1>
-            <span className="rounded bg-red/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-red ring-1 ring-red/40">
-              RANK-1 PRIMARY
-            </span>
-          </div>
-          <p className="meta mt-0.5">
-            Ranking vessels against reconstructed origin · {incident.eventId} · closest approach vs T−{incident.timestampUtc.substring(11, 16)} drop window
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        className="px-0.5"
+        title="Vessel attribution"
+        badge={{ label: "RANK-1 PRIMARY", tone: "crit" }}
+        subtitle={`Ranking vessels against reconstructed origin · ${incident.eventId} · closest approach vs T−${incident.timestampUtc.substring(11, 16)} drop window`}
+      />
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(330px,380px)] gap-3 overflow-hidden">
         {/* map */}
@@ -48,7 +42,7 @@ export default function VesselAttributionPage() {
         {/* right column */}
         <div className="flex flex-col gap-1.5 overflow-y-auto pr-0.5">
           <div className="flex items-center justify-between px-0.5">
-            <span className="meta-label">CANDIDATE RANKING</span>
+            <span className="text-label-caps text-ink-dim">CANDIDATE RANKING</span>
             <Link
               href={`/vessels/${selected?.imo ?? candidateVessels[0]?.imo}`}
               className="flex items-center gap-1 font-mono text-[10px] font-semibold text-aqua transition-colors duration-150 hover:text-teal"

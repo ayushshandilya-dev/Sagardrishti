@@ -7,6 +7,7 @@ import { MaritimeMap } from "@/components/map/MaritimeMap";
 import { LayerChips } from "@/components/map/LayerChips";
 import { TimelineDock } from "@/components/drift/TimelineDock";
 import { OriginInspector } from "@/components/drift/OriginInspector";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ArrowRight, MapPin } from "lucide-react";
 
 export default function ReverseDriftPage() {
@@ -26,32 +27,29 @@ export default function ReverseDriftPage() {
   return (
     <div className="relative flex h-full flex-col overflow-hidden p-3 pb-2">
       {/* header */}
-      <div className="mb-3 flex items-center justify-between px-0.5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold tracking-tight text-ink">Reverse drift reconstruction</h1>
-            <span className="rounded bg-teal/12 px-2 py-0.5 font-mono text-[10px] font-semibold text-teal ring-1 ring-teal/30">
-              RK4 · BACKTRACK
-            </span>
-          </div>
-          <p className="meta mt-0.5">Trajectory backtrack for {incident.eventId} · observation {incident.timestampUtc} UTC</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="hidden items-center gap-2 rounded bg-bg-1 px-3 py-1.5 ring-1 ring-line sm:flex">
-            <MapPin className="h-3.5 w-3.5 text-amber" />
-            <span className="font-mono text-[11px] text-ink tnum">
-              {origin ? `${origin.latitude.toFixed(3)}°N ${origin.longitude.toFixed(3)}°E @ T−${currentDriftHour}h` : "—"}
-            </span>
-          </div>
-          <Link
-            href="/attribution"
-            className="flex items-center gap-1.5 rounded-md bg-bg-2 px-3 py-1.5 text-xs font-semibold text-aqua ring-1 ring-aqua/30 transition-colors duration-150 hover:bg-panel-hover focus-ring"
-          >
-            Assign to vessels
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        className="mb-3 px-0.5"
+        title="Reverse drift reconstruction"
+        badge={{ label: "RK4 · BACKTRACK", tone: "ok" }}
+        subtitle={`Trajectory backtrack for ${incident.eventId} · observation ${incident.timestampUtc} UTC`}
+        right={
+          <>
+            <div className="hidden items-center gap-2 rounded-md bg-bg-1 px-3 py-1.5 ring-1 ring-line sm:flex">
+              <MapPin className="h-3.5 w-3.5 text-amber" />
+              <span className="text-telemetry-md text-ink tnum">
+                {origin ? `${origin.latitude.toFixed(3)}°N ${origin.longitude.toFixed(3)}°E @ T−${currentDriftHour}h` : "—"}
+              </span>
+            </div>
+            <Link
+              href="/attribution"
+              className="flex items-center gap-1.5 rounded-md bg-bg-2 px-3 py-1.5 text-xs font-semibold text-aqua ring-1 ring-aqua/30 transition-colors duration-150 hover:bg-panel-hover focus-ring"
+            >
+              Assign to vessels
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </>
+        }
+      />
 
       {/* full-bleed map */}
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-panel border border-line bg-bg-0">

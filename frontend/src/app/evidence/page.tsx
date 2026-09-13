@@ -5,7 +5,10 @@ import { useCommandStore } from "@/lib/store";
 import { MOCK_EVIDENCE_LEDGER } from "@/lib/mockData";
 import { EvidenceChain } from "@/components/evidence/EvidenceChain";
 import { VerificationPanel } from "@/components/evidence/VerificationPanel";
-import { ShieldCheck, Fingerprint, Network } from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { ShieldCheck, Fingerprint, Network, Link2 } from "lucide-react";
 
 export default function EvidenceLedgerPage() {
   const { hasVerified, evidenceLedger } = useCommandStore();
@@ -13,49 +16,56 @@ export default function EvidenceLedgerPage() {
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 pb-2">
-      <div className="flex items-center justify-between px-0.5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold tracking-tight text-ink">Evidence ledger</h1>
-            <span
-              className={`flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-[10px] font-semibold ring-1 ${
-                hasVerified ? "bg-green/10 text-green ring-green/30" : "bg-bg-1 text-ink-faint ring-line"
-              }`}
-            >
-              <ShieldCheck className="h-3 w-3" />
-              {hasVerified ? "VERIFIED" : "UNVERIFIED"}
-            </span>
-          </div>
-          <p className="meta mt-0.5">
-            Forensic chain of custody · node {ledger.nodeId} · {ledger.chainLength} blocks · proof-of-work anchored
-          </p>
-        </div>
-        <div className="flex items-center gap-2 font-mono text-[9px] text-ink-faint">
-          <span className="flex items-center gap-1 rounded bg-bg-1 px-2 py-1 ring-1 ring-line">
-            <Network className="h-3 w-3 text-aqua" />
-            {ledger.chainValid ? "CHAIN VALID" : "CHAIN INVALID"}
-          </span>
-          <span className="flex items-center gap-1 rounded bg-bg-1 px-2 py-1 ring-1 ring-line">
-            <Fingerprint className="h-3 w-3 text-teal" />
-            Ed25519 · CERTIFIED
-          </span>
-        </div>
-      </div>
+      <PageHeader
+        className="px-0.5"
+        title="Evidence ledger"
+        badge={
+          hasVerified
+            ? { label: "VERIFIED", tone: "ok" }
+            : { label: "UNVERIFIED", tone: "neutral" }
+        }
+        subtitle={`Forensic chain of custody · node ${ledger.nodeId} · ${ledger.chainLength} blocks · proof-of-work anchored`}
+        right={
+          <>
+            <StatusBadge
+              label={ledger.chainValid ? "CHAIN VALID" : "CHAIN INVALID"}
+              tone={ledger.chainValid ? "ok" : "crit"}
+              icon={<Network className="h-3 w-3" />}
+            />
+            <StatusBadge
+              label="Ed25519 · CERTIFIED"
+              tone="ok"
+              dot={false}
+              icon={<Fingerprint className="h-3 w-3" />}
+            />
+          </>
+        }
+      />
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_380px] gap-3 overflow-hidden">
         {/* vertical forensic chain */}
-        <div className="min-h-0 overflow-y-auto rounded-panel border border-line bg-bg-1 px-4 py-3.5">
-          <div className="meta-label mb-3">APPEND-ONLY BLOCKCHAIN</div>
+        <Panel
+          title="APPEND-ONLY BLOCKCHAIN"
+          icon={Link2}
+          tone="info"
+          className="overflow-hidden"
+          bodyClassName="overflow-y-auto px-4 py-3.5"
+        >
           <EvidenceChain blocks={ledger.blocks} />
-        </div>
+        </Panel>
 
         {/* verification + integrity panel */}
         <div className="min-h-0 overflow-y-auto pr-0.5">
           <VerificationPanel />
 
-          <div className="mt-3 rounded-panel border border-dashed border-line px-3.5 py-3">
-            <div className="meta-label mb-2">Evidence-preserving pipeline</div>
-            <ol className="flex list-decimal flex-col gap-1 pl-4 text-[10px] leading-relaxed text-ink-dim">
+          <Panel
+            title="Evidence-preserving pipeline"
+            icon={ShieldCheck}
+            tone="ok"
+            className="mt-3"
+            bodyClassName="px-3.5 py-3"
+          >
+            <ol className="flex list-decimal flex-col gap-1 pl-4 text-body-sm leading-relaxed text-ink-dim">
               <li>SAR scene ingested raw, immutable hash committed</li>
               <li>Calibration + Lee speckle filter logged as provenance ops</li>
               <li>AIS stream Kalman-filtered, de-duplicated, time-anchored</li>
@@ -63,7 +73,7 @@ export default function EvidenceLedgerPage() {
               <li>5-factor attribution tensor sealed into Merkle root</li>
               <li>Root signed by ICG surveillance Ed25519 authority</li>
             </ol>
-          </div>
+          </Panel>
         </div>
       </div>
     </div>

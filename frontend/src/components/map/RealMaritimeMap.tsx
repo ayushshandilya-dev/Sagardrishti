@@ -7,9 +7,22 @@ import { useCommandStore } from "@/lib/store";
 import { CandidateVessel, Incident, DriftTrajectoryPoint } from "@/lib/types";
 import { LayerChips } from "./LayerChips";
 import { ZoomIn, ZoomOut, RotateCcw, ShieldCheck, Satellite } from "lucide-react";
-import { createOilSheenLayer } from "./engine";
-import { shipSilhouette } from "./engine";
-import type { SheenLayerHandle } from "./engine";
+import { createOilSheenLayer, shipSilhouette } from "./engine";
+import {
+  createBathymetryLayer,
+  createParticleLayer,
+  createLaneFlowLayer,
+  createPortLightLayer,
+  createBloomLayer,
+  createSwathSweepLayer,
+} from "./engine";
+import type {
+  SheenLayerHandle,
+  BloomHandle,
+  BloomPoint,
+  SwathHandle,
+  LivingHandle,
+} from "./engine";
 
 /* Compass bearing (degrees clockwise from north) between two lng/lat points */
 function bearingDeg(a: [number, number], b: [number, number]): number {
@@ -95,6 +108,39 @@ function bearingArrowIcon(color: string): ImageData {
   return arrowIcon(color, 5);
 }
 
+/* Shared lane / port definitions — reused by both the vector layers
+   (addBaseLayers) and the living GPU engine below so both stay in sync. */
+const SHIPPING_LANES: { name: string; traffic: number; coords: [number, number][] }[] = [
+  {
+    name: "MUNDRA EXPORT CORRIDOR",
+    traffic: 3,
+    coords: [[70.0, 22.85], [69.85, 22.7], [69.6, 22.45], [69.2, 21.9], [68.7, 21.4]],
+  },
+  {
+    name: "KANDLA CRUDE IMPORT LANE",
+    traffic: 3,
+    coords: [[70.3, 22.95], [70.1, 22.9], [69.7, 22.8], [69.2, 22.6], [68.6, 22.2]],
+  },
+  {
+    name: "ARABIAN SEA TRANSIT ROUTE",
+    traffic: 2,
+    coords: [[67.8, 19.6], [68.4, 20.6], [69.0, 21.2], [69.6, 21.6], [70.2, 21.9]],
+  },
+  {
+    name: "SIKKA ENERGY TERMINAL ROUTE",
+    traffic: 1,
+    coords: [[69.9, 22.5], [69.75, 22.5], [69.5, 22.4], [69.2, 22.2], [68.9, 22.0]],
+  },
+];
+
+const PORT_DEFS: { name: string; c: [number, number]; throughput: string; vessels: number }[] = [
+  { name: "KANDLA", c: [70.22, 23.03], throughput: "144 MT/yr", vessels: 41 },
+  { name: "MUNDRA", c: [69.73, 22.85], throughput: "155 MT/yr", vessels: 63 },
+  { name: "SIKKA", c: [69.84, 22.43], throughput: "42 MT/yr", vessels: 17 },
+  { name: "OKHA", c: [69.07, 22.47], throughput: "8 MT/yr", vessels: 6 },
+  { name: "VADINAR", c: [69.72, 22.48], throughput: "96 MT/yr", vessels: 29 },
+];
+
 export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
   incident: propIncident,
   candidateVessels: propVessels,
@@ -115,6 +161,9 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
   const driftLineRef = useRef<DriftTrajectoryPoint[]>([]);
   const prevDemoStepRef = useRef(0);
   const sheenRef = useRef<SheenLayerHandle | null>(null);
+  const livingRef = useRef<Record<string, LivingHandle | null>>({});
+  const bloomRef = useRef<BloomHandle | null>(null);
+  const swathRef = useRef<SwathHandle | null>(null);
 
   const store = useCommandStore();
   const incident = propIncident ?? store.getSelectedIncident();
@@ -545,28 +594,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     });
 
     /* ── SHIPPING CORRIDORS ──────────────────────────────────── */
-    const lanes: { name: string; traffic: number; coords: [number, number][] }[] = [
-      {
-        name: "MUNDRA EXPORT CORRIDOR",
-        traffic: 3,
-        coords: [[70.0, 22.85], [69.85, 22.7], [69.6, 22.45], [69.2, 21.9], [68.7, 21.4]],
-      },
-      {
-        name: "KANDLA CRUDE IMPORT LANE",
-        traffic: 3,
-        coords: [[70.3, 22.95], [70.1, 22.9], [69.7, 22.8], [69.2, 22.6], [68.6, 22.2]],
-      },
-      {
-        name: "ARABIAN SEA TRANSIT ROUTE",
-        traffic: 2,
-        coords: [[67.8, 19.6], [68.4, 20.6], [69.0, 21.2], [69.6, 21.6], [70.2, 21.9]],
-      },
-      {
-        name: "SIKKA ENERGY TERMINAL ROUTE",
-        traffic: 1,
-        coords: [[69.9, 22.5], [69.75, 22.5], [69.5, 22.4], [69.2, 22.2], [68.9, 22.0]],
-      },
-    ];
+    const lanes = SHIPPING_LANES;
     map.addSource("lanes", {
       type: "geojson",
       data: {
@@ -817,13 +845,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     });
 
     /* ── PORTS — realistic beacons ───────────────────────────── */
-    const ports: { name: string; c: [number, number]; throughput: string; vessels: number }[] = [
-      { name: "KANDLA", c: [70.22, 23.03], throughput: "144 MT/yr", vessels: 41 },
-      { name: "MUNDRA", c: [69.73, 22.85], throughput: "155 MT/yr", vessels: 63 },
-      { name: "SIKKA", c: [69.84, 22.43], throughput: "42 MT/yr", vessels: 17 },
-      { name: "OKHA", c: [69.07, 22.47], throughput: "8 MT/yr", vessels: 6 },
-      { name: "VADINAR", c: [69.72, 22.48], throughput: "96 MT/yr", vessels: 29 },
-    ];
+    const ports = PORT_DEFS;
     map.addSource("ports", {
       type: "geojson",
       data: {
@@ -1307,6 +1329,87 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     }
   }
 
+  /* ── LIVING GPU ENGINE OVERLAYS ─────────────────────────────
+     Additive custom WebGL layers stacked above the base layers:
+     advected current/wind particles, streaming lane chevrons,
+     warm port beacons, selective intelligence bloom, and the
+     animated Sentinel-1 scan band. */
+  function addLivingOverlayStacks(map: maplibregl.Map) {
+    const inc = incident;
+    const guard = (name: string, fn: () => void) => {
+      try {
+        fn();
+      } catch (err) {
+        console.warn(`SD: ${name} living layer unavailable.`, err);
+      }
+    };
+
+    const maxVessels = Math.max(...PORT_DEFS.map((p) => p.vessels));
+    const beacons = PORT_DEFS.map((p) => ({
+      name: p.name,
+      c: p.c,
+      intensity: 0.35 + 0.65 * (p.vessels / maxVessels),
+    }));
+
+    guard("currents", () => {
+      const c = createParticleLayer("particles-current", "current");
+      if (map.getLayer("particles-current")) map.removeLayer("particles-current");
+      map.addLayer(c.layer);
+      livingRef.current.currents = c.handle;
+      c.handle.setVisible(layers.currents);
+    });
+
+    guard("wind", () => {
+      const w = createParticleLayer("particles-wind", "wind");
+      if (map.getLayer("particles-wind")) map.removeLayer("particles-wind");
+      map.addLayer(w.layer);
+      livingRef.current.wind = w.handle;
+      w.handle.setVisible(layers.weather);
+      w.handle.setAlpha(0.55);
+    });
+
+    guard("lanes", () => {
+      const lf = createLaneFlowLayer("lanes-flow", SHIPPING_LANES);
+      if (map.getLayer("lanes-flow")) map.removeLayer("lanes-flow");
+      map.addLayer(lf.layer);
+      livingRef.current.laneFlow = lf.handle;
+      lf.handle.setVisible(layers.shipping);
+    });
+
+    guard("ports", () => {
+      const pl = createPortLightLayer("port-lights", beacons);
+      if (map.getLayer("port-lights")) map.removeLayer("port-lights");
+      map.addLayer(pl.layer);
+      livingRef.current.portLights = pl.handle;
+      pl.handle.setAlpha(0.5);
+    });
+
+    guard("bloom", () => {
+      const b = createBloomLayer("bloom-intel");
+      if (map.getLayer("bloom-intel")) map.removeLayer("bloom-intel");
+      map.addLayer(b.layer);
+      bloomRef.current = b.handle;
+    });
+
+    guard("swath", () => {
+      const sw = createSwathSweepLayer("sentinel-sweep");
+      if (map.getLayer("sentinel-sweep")) map.removeLayer("sentinel-sweep");
+      map.addLayer(sw.layer);
+      swathRef.current = sw.handle;
+      sw.handle.setVisible(layers.sentinel);
+      sw.handle.setAlpha(0);
+      if (inc) {
+        const m = inc.sarMetadata;
+        const slant = m.passDirection === "ASCENDING" ? 1 : -1;
+        const [cx, cy] = [
+          inc.spillGeometry.centroid.longitude,
+          inc.spillGeometry.centroid.latitude,
+        ];
+        sw.handle.setAxis([cx - 1.5 * slant * 0.55, cy - 1.5], [cx + 1.5 * slant * 0.55, cy + 1.5]);
+      }
+    });
+  }
+
   /* ═══════════════════════════════════════════════════════════
      MAP INIT
      ═══════════════════════════════════════════════════════════ */
@@ -1356,8 +1459,22 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     map.on("load", () => {
       setMapLoaded(true);
       map.resize();
+
+      /* ground relief first so the satellite raster tints it warm */
+      try {
+        const g = createBathymetryLayer("bathy-relief");
+        if (map.getLayer("bathy-relief")) map.removeLayer("bathy-relief");
+        map.addLayer(g.layer);
+        livingRef.current.bathy = g.handle;
+        g.handle.setAlpha(0.36);
+        g.handle.setVisible(layers.bathy);
+      } catch (err) {
+        console.warn("SD: bathymetry relief layer unavailable.", err);
+      }
+
       addBaseLayers(map);
       wirePortPopups(map);
+      addLivingOverlayStacks(map);
     });
 
     map.on("move", () => {
@@ -1366,6 +1483,9 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     });
 
     mapRef.current = map;
+    if (process.env.NODE_ENV !== "production") {
+      (window as unknown as Record<string, unknown>).__sdMap = map;
+    }
 
     const markers = markersRef.current;
     const markersByImo = markersByImoRef.current;
@@ -2124,7 +2244,63 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     vis("swath-core", layers.sentinel);
     vis("sentinel-axis", layers.sentinel);
     vis("sentinel-dir", layers.sentinel);
+    /* living GPU engine sync */
+    livingRef.current.bathy?.setVisible(layers.bathy);
+    livingRef.current.currents?.setVisible(layers.currents);
+    livingRef.current.wind?.setVisible(layers.weather);
+    livingRef.current.laneFlow?.setVisible(layers.shipping);
+    livingRef.current.portLights?.setVisible(true);
+    bloomRef.current?.setVisible(layers.oil);
+    swathRef.current?.setVisible(layers.sentinel);
   }, [layers, mapLoaded]);
+
+  /* ── SELECTIVE BLOOM — only intelligence features glow ────── */
+  useEffect(() => {
+    if (!mapLoaded || !bloomRef.current) return;
+    if (!incident) {
+      bloomRef.current.setPoints([]);
+      return;
+    }
+    const pts: BloomPoint[] = [];
+    const cent = incident.spillGeometry.centroid;
+    pts.push({
+      lngLat: [cent.longitude, cent.latitude],
+      color: [1.0, 0.72, 0.28],
+      size: 0.0008,
+      intensity: 1,
+    });
+    const s = useCommandStore.getState();
+    const top = propVessels?.[0] ?? s.candidateVessels?.[0];
+    if (top) {
+      pts.push({
+        lngLat: [top.longitude, top.latitude],
+        color: [1.0, 0.38, 0.32],
+        size: 0.0006,
+        intensity: 0.85,
+      });
+    }
+    bloomRef.current.setPoints(pts);
+  }, [incident, propVessels, mapLoaded]);
+
+  /* ── SENTINEL-1 SWEEP — animated SAR band during the pass ── */
+  useEffect(() => {
+    if (!mapLoaded || !swathRef.current) return;
+    if (incident) {
+      const m = incident.sarMetadata;
+      const slant = m.passDirection === "ASCENDING" ? 1 : -1;
+      const [cx, cy] = [
+        incident.spillGeometry.centroid.longitude,
+        incident.spillGeometry.centroid.latitude,
+      ];
+      swathRef.current.setAxis(
+        [cx - slant * 0.82, cy - 1.5],
+        [cx + slant * 0.82, cy + 1.5]
+      );
+    }
+    const passActive = isDemoRunning && demoStep === 1;
+    swathRef.current.setActive(passActive);
+    swathRef.current.setAlpha(passActive ? 0.62 : 0);
+  }, [isDemoRunning, demoStep, incident, mapLoaded]);
 
   /* ── AIS VESSELS — realistic silhouettes, trails, live fix ── */
   useEffect(() => {

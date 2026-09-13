@@ -116,6 +116,82 @@
   }
 }
 
+/* ── TACTICAL TYPOGRAPHY SCALE ─────────────────────────────── */
+/* Ported from the Stitch command-core spec: Inter for structure,
+   JetBrains Mono for data/telemetry, wide-tracked uppercase caps. */
+
+@utility text-display-lg {
+  font-size: 2rem;
+  line-height: 2.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+@utility text-headline-md {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+@utility text-title-sm {
+  font-size: 0.9375rem;
+  line-height: 1.375rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+
+@utility text-body-md {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+@utility text-body-sm {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  font-weight: 400;
+  letter-spacing: 0.005em;
+}
+
+@utility text-telemetry-lg {
+  font-family: var(--font-jbm);
+  font-size: 1.125rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+@utility text-telemetry-md {
+  font-family: var(--font-jbm);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+@utility text-telemetry-sm {
+  font-family: var(--font-jbm);
+  font-size: 0.6875rem;
+  line-height: 0.875rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+@utility text-label-caps {
+  font-family: var(--font-jbm);
+  font-size: 0.625rem;
+  line-height: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@utility tabular-sm {
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── MOTION PRIMITIVES ─────────────────────────────────────── */
 @keyframes drift-dash {
   to { stroke-dashoffset: -20; }

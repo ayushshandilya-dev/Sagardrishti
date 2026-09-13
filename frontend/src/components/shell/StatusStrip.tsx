@@ -5,7 +5,7 @@ import { Satellite, Radio, Lock, Database } from "lucide-react";
 
 export const StatusStrip: React.FC = () => {
   return (
-    <div className="flex h-7 shrink-0 select-none items-center justify-between gap-4 border-b border-line bg-bg-0 px-3 font-mono text-[10px] text-ink-dim">
+    <div className="flex h-7 shrink-0 select-none items-center justify-between gap-4 border-b border-line bg-bg-0 px-3 text-telemetry-sm text-ink-dim">
       <div className="flex items-center gap-3.5">
         <div className="flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-orange animate-pulse" />

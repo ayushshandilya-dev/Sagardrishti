@@ -4,12 +4,14 @@ import React from "react";
 import { useCommandStore } from "@/lib/store";
 import { MaritimeMap } from "@/components/map/MaritimeMap";
 import { LayerChips } from "@/components/map/LayerChips";
-import { MetricCard } from "@/components/kpi/MetricCard";
 import { EmptyState } from "@/components/kpi/EmptyState";
 import { CopInspector } from "@/components/incident/CopInspector";
 import { IncidentDrawer } from "@/components/incident/IncidentDrawer";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { KpiCard } from "@/components/ui/KpiCard";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { AnimatePresence, motion } from "framer-motion";
-import { Siren } from "lucide-react";
+import { Siren, Satellite, Sailboat, Radar } from "lucide-react";
 
 export default function OperationsPage() {
   const { incidents, selectedIncidentId, setSelectedIncidentId } =
@@ -25,34 +27,31 @@ export default function OperationsPage() {
 
   return (
     <div className="flex h-full flex-col gap-4 p-4 pb-3">
-      {/* Header */}
-      <div className="flex items-center justify-between px-0.5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold tracking-tight text-ink">Operations</h1>
-            <span className="meta-label">INDIAN OCEAN COASTAL WATCH</span>
-          </div>
-          <p className="meta mt-0.5">Multi-sensor surface monitoring · live COP</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 rounded-md bg-green/10 px-2 py-1 font-mono text-[10px] font-semibold text-green ring-1 ring-green/30">
-            <span className="h-1.5 w-1.5 rounded-full bg-green" />
-            LIVE
-          </span>
-          <span className="flex items-center gap-1.5 rounded-md bg-bg-1 px-2 py-1 font-mono text-[10px] text-ink-dim ring-1 ring-line">
-            <Siren className="h-3 w-3 text-red" />
-            2 incidents
-          </span>
-        </div>
-      </div>
+      <PageHeader
+        title="Operations"
+        eyebrow="INDIAN OCEAN COASTAL WATCH"
+        subtitle="Multi-sensor surface monitoring · live COP"
+        right={
+          <>
+            <StatusBadge label="LIVE" tone="ok" pulse />
+            <StatusBadge
+              label={`${incidents.length} incidents`}
+              tone="crit"
+              icon={<Siren className="h-3 w-3 text-red" />}
+            />
+          </>
+        }
+      />
 
-      {/* 4 KPI cards — top border accent only, no sparklines */}
+      {/* 4 KPI cards */}
       <div className="grid grid-cols-4 gap-4">
         <div className="relative">
-          <MetricCard
-            title="Active incidents"
+          <KpiCard
+            label="Active incidents"
+            icon={Siren}
+            tone="crit"
             value={incidents.length}
-            accent="#EF4444"
+            badge={`${incidents.length} ACTIVE`}
             sub="SD-2026-00421 · SD-2026-00389"
           />
           <AnimatePresence>
@@ -68,25 +67,27 @@ export default function OperationsPage() {
             )}
           </AnimatePresence>
         </div>
-        <MetricCard
-          title="SAR passes"
+        <KpiCard
+          label="SAR passes"
+          icon={Satellite}
+          tone="info"
           value={24}
           unit="/ 24 h"
-          accent="#38BDF8"
           sub="Sentinel-1A · RISAT-1A"
         />
-        <MetricCard
-          title="AIS vessels tracked"
+        <KpiCard
+          label="AIS vessels tracked"
+          icon={Sailboat}
+          tone="ok"
           value={4821}
-          live
-          accent="#22D3A7"
           sub="Arabian Sea · Gulf of Kutch"
         />
-        <MetricCard
-          title="EEZ coverage"
+        <KpiCard
+          label="EEZ coverage"
+          icon={Radar}
+          tone="warn"
           value={2.37}
           unit="M km²"
-          accent="#F59E0B"
           sub="98.2 % taskable"
         />
       </div>
@@ -133,11 +134,11 @@ export default function OperationsPage() {
           initial={{ opacity: 0, x: 6 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.2 }}
-          className="flex flex-col gap-4 overflow-y-auto"
+          className="flex flex-col overflow-hidden"
         >
-          <div className="flex items-center justify-between px-0.5">
-            <span className="meta-label">INCIDENT REGISTRY</span>
-            <span className="font-mono text-[10px] text-ink-faint tnum">{incidents.length}</span>
+          <div className="flex items-center justify-between px-0.5 pb-2">
+            <span className="text-label-caps text-ink-dim">INCIDENT REGISTRY</span>
+            <StatusBadge label={String(incidents.length)} tone="neutral" dot={false} />
           </div>
           <IncidentDrawer
             incidents={incidents}

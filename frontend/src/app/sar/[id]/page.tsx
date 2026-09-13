@@ -12,6 +12,8 @@ import {
   EvidenceChips,
   DetectorScores,
 } from "@/components/sar/SarPanels";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { TacticalButton } from "@/components/ui/TacticalButton";
 import { Wind, FileDown, ArrowLeft, ScanLine } from "lucide-react";
 
 export default function SarInvestigationPage({
@@ -26,49 +28,45 @@ export default function SarInvestigationPage({
   return (
     <div className="flex h-full flex-col gap-3 p-3 pb-2">
       {/* header */}
-      <div className="flex items-center justify-between px-0.5">
-        <div className="flex items-center gap-3">
+      <PageHeader
+        className="px-0.5"
+        title={incident.eventId}
+        badge={{
+          label: incident.classification.classLabel === "MINERAL_OIL" ? "MINERAL OIL" : incident.classification.classLabel,
+          tone: "warn",
+        }}
+        subtitle={`${incident.sarMetadata.mission} · ${incident.sarMetadata.productType} · ${incident.timestampUtc} UTC · ${(incident.classification.confidence * 100).toFixed(1)} % confidence`}
+        left={
           <Link
             href="/operations"
-            className="flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[10px] text-ink-dim ring-1 ring-line transition-colors duration-150 hover:bg-bg-2 hover:text-ink"
+            className="mr-1 flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[10px] text-ink-dim ring-1 ring-line transition-colors duration-150 hover:bg-bg-2 hover:text-ink"
           >
             <ArrowLeft className="h-3 w-3" />
             OPERATIONS
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-mono text-base font-semibold text-ink">{incident.eventId}</h1>
-              <span className="rounded bg-amber/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber ring-1 ring-amber/40">
-                {incident.classification.classLabel === "MINERAL_OIL" ? "MINERAL OIL" : incident.classification.classLabel}
-              </span>
-            </div>
-            <p className="meta mt-0.5">
-              {incident.sarMetadata.mission} · {incident.sarMetadata.productType} ·{" "}
-              {incident.timestampUtc} UTC · {(incident.classification.confidence * 100).toFixed(1)} % confidence
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 rounded-md bg-bg-2 px-3 py-1.5 text-xs font-medium text-ink ring-1 ring-line transition-colors duration-150 hover:text-teal focus-ring">
-            <FileDown className="h-3.5 w-3.5" />
-            Generate evidence snapshot
-          </button>
-          <Link
-            href="/sar-investigation"
-            className="flex items-center gap-1.5 rounded-md bg-amber/10 px-3 py-1.5 text-xs font-semibold text-amber ring-1 ring-amber/30 transition-colors duration-150 hover:bg-amber/15 focus-ring"
-          >
-            <ScanLine className="h-3.5 w-3.5" />
-            Open SAR investigation
-          </Link>
-          <Link
-            href="/drift"
-            className="flex items-center gap-1.5 rounded-md bg-bg-2 px-3 py-1.5 text-xs font-semibold text-aqua ring-1 ring-aqua/30 transition-colors duration-150 hover:bg-panel-hover focus-ring"
-          >
-            <Wind className="h-3.5 w-3.5" />
-            Open drift reconstruction
-          </Link>
-        </div>
-      </div>
+        }
+        right={
+          <>
+            <TacticalButton variant="secondary" icon={FileDown}>
+              Generate evidence snapshot
+            </TacticalButton>
+            <Link
+              href="/sar-investigation"
+              className="flex items-center gap-1.5 rounded-md bg-amber/10 px-3 py-1.5 text-xs font-semibold text-amber ring-1 ring-amber/30 transition-colors duration-150 hover:bg-amber/15 focus-ring"
+            >
+              <ScanLine className="h-3.5 w-3.5" />
+              Open SAR investigation
+            </Link>
+            <Link
+              href="/drift"
+              className="flex items-center gap-1.5 rounded-md bg-bg-2 px-3 py-1.5 text-xs font-semibold text-aqua ring-1 ring-aqua/30 transition-colors duration-150 hover:bg-panel-hover focus-ring"
+            >
+              <Wind className="h-3.5 w-3.5" />
+              Open drift reconstruction
+            </Link>
+          </>
+        }
+      />
 
       {/* 70 / 30 split */}
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(320px,420px)] gap-3">
@@ -79,7 +77,7 @@ export default function SarInvestigationPage({
               <span className="mr-3 text-ink-faint">DARKSIDE — C-BAND VV/VH</span>
               RAW · CALIBRATED · FILTERED · VV · VH · SEGMENTATION · FINAL MASK
             </span>
-            <span className="font-mono text-[10px] text-ink-faint tnum">
+            <span className="text-telemetry-sm text-ink-faint tnum">
               scene {incident.sarMetadata.relativeOrbit} · {incident.spillGeometry.areaKm2} km²
             </span>
           </div>

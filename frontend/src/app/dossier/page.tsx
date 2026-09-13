@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { useCommandStore } from "@/lib/store";
 import { cn } from "@/lib/util";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { TacticalButton } from "@/components/ui/TacticalButton";
 import {
   ScrollText,
   FileSignature,
@@ -55,24 +57,21 @@ export default function LegalDossierPage() {
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 pb-2">
-      <div className="flex items-center justify-between px-0.5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold tracking-tight text-ink">Legal dossier</h1>
-            <span className="rounded bg-bg-1 px-2 py-0.5 font-mono text-[10px] text-ink-faint ring-1 ring-line">
-              CASE {incident.eventId}
-            </span>
-          </div>
-          <p className="meta mt-0.5">Official case file · s.356 Merchant Shipping Act, 1958 · marine pollution</p>
-        </div>
-        <button
-          onClick={() => setEnvelope((v) => !v)}
-          className="flex items-center gap-1.5 rounded-md bg-bg-2 px-3 py-1.5 text-xs font-medium text-ink ring-1 ring-line transition-colors duration-150 hover:text-teal focus-ring"
-        >
-          <Printer className="h-3.5 w-3.5" />
-          {envelope ? "Hide report" : "Open report"}
-        </button>
-      </div>
+      <PageHeader
+        className="px-0.5"
+        title="Legal dossier"
+        badge={{ label: `CASE ${incident.eventId}`, tone: "neutral" }}
+        subtitle="Official case file · s.356 Merchant Shipping Act, 1958 · marine pollution"
+        right={
+          <TacticalButton
+            variant="secondary"
+            icon={Printer}
+            onClick={() => setEnvelope((v) => !v)}
+          >
+            {envelope ? "Hide report" : "Open report"}
+          </TacticalButton>
+        }
+      />
 
       {envelope && (
         <div className="min-h-0 flex-1 overflow-y-auto rounded-panel border border-line bg-bg-1 shadow-float">

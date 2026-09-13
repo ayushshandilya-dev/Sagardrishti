@@ -6,6 +6,9 @@ import { use } from "react";
 import { useCommandStore } from "@/lib/store";
 import { MaritimeMap } from "@/components/map/MaritimeMap";
 import { KinematicCharts } from "@/components/vessels/KinematicCharts";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { TelemetryRow } from "@/components/ui/TelemetryRow";
 import { ArrowLeft, Anchor, Radio } from "lucide-react";
 
 export default function VesselInvestigationPage({
@@ -23,36 +26,35 @@ export default function VesselInvestigationPage({
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 pb-2">
-      <div className="flex items-center justify-between px-0.5">
-        <div className="flex items-center gap-3">
+      <PageHeader
+        className="px-0.5"
+        title={vessel.vesselName}
+        badge={{ label: vessel.riskBadge, tone: "crit" }}
+        subtitle={`IMO ${vessel.imo} · MMSI ${vessel.mmsi} · ${vessel.flag} · ${vessel.vesselType}`}
+        left={
           <Link
             href="/attribution"
-            className="flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[10px] text-ink-dim ring-1 ring-line transition-colors duration-150 hover:bg-bg-2 hover:text-ink"
+            className="mr-1 flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[10px] text-ink-dim ring-1 ring-line transition-colors duration-150 hover:bg-bg-2 hover:text-ink"
           >
             <ArrowLeft className="h-3 w-3" />
             ATTRIBUTION
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-semibold tracking-tight text-ink">{vessel.vesselName}</h1>
-              <span className="rounded bg-red/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-red ring-1 ring-red/40">
-                {vessel.riskBadge}
-              </span>
-            </div>
-            <p className="meta mt-0.5">
-              IMO {vessel.imo} · MMSI {vessel.mmsi} · {vessel.flag} · {vessel.vesselType}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 font-mono text-[10px] text-ink-faint">
-          <span className="flex items-center gap-1 rounded bg-bg-1 px-2 py-1 ring-1 ring-line">
-            <Anchor className="h-3 w-3 text-aqua" /> {vessel.dwt ? `${vessel.dwt} DWT` : "—"}
-          </span>
-          <span className="flex items-center gap-1 rounded bg-bg-1 px-2 py-1 ring-1 ring-line">
-            <Radio className="h-3 w-3 text-teal" /> AIS {vessel.speedOverGround.toFixed(1)} kn
-          </span>
-        </div>
-      </div>
+        }
+        right={
+          <>
+            <StatusBadge
+              label={vessel.dwt ? `${vessel.dwt} DWT` : "—"}
+              tone="info"
+              icon={<Anchor className="h-3 w-3" />}
+            />
+            <StatusBadge
+              label={`AIS ${vessel.speedOverGround.toFixed(1)} kn`}
+              tone="ok"
+              icon={<Radio className="h-3 w-3" />}
+            />
+          </>
+        }
+      />
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(340px,1.15fr)_minmax(0,1fr)] gap-3 overflow-hidden">
         {/* live track + drift overlay */}
@@ -70,9 +72,10 @@ export default function VesselInvestigationPage({
               ["COG", `${vessel.courseOverGround.toFixed(0)}°`, "#22D3A7"],
               ["HDG", `${vessel.heading.toFixed(0)}°`, "#D6A84F"],
             ].map(([label, val, c]) => (
-              <div key={label as string} className="rounded-panel border border-line bg-bg-1 px-3 py-2">
+              <div key={label as string} className="relative overflow-hidden rounded-panel border border-line bg-bg-1 px-3 py-2">
+                <span className="absolute inset-x-0 top-0 h-0.5" style={{ background: c as string }} />
                 <div className="meta-label">{label}</div>
-                <div className="mt-0.5 font-mono text-sm font-semibold tnum" style={{ color: c as string }}>
+                <div className="mt-0.5 text-telemetry-lg tnum" style={{ color: c as string }}>
                   {val}
                 </div>
               </div>
@@ -80,29 +83,20 @@ export default function VesselInvestigationPage({
           </div>
           <div className="rounded-panel border border-line bg-bg-1 px-3.5 py-2.5">
             <div className="meta-label mb-1">Attribution vs {incident.eventId}</div>
-            <div className="flex items-center justify-between font-mono text-[10px] text-ink-dim">
-              <span>Closest approach</span>
-              <span className="tnum">{(vessel.closestApproachMeters / 1000).toFixed(2)} km</span>
+            <TelemetryRow label="Closest approach" value={(vessel.closestApproachMeters / 1000).toFixed(2)} unit="km" />
+            <TelemetryRow label="Heading alignment" value={`${vessel.headingAlignmentDeg}°`} />
+            <TelemetryRow label="Time overlap" value={vessel.timeOverlapMinutes} unit="min" />
+            <div className="flex items-baseline justify-between gap-3 py-[3px]">
+              <span className="shrink-0 text-label-caps text-ink-faint">AIS anomaly</span>
+              <span className={vessel.aisAnomaly === "None detected" ? "font-mono text-[11px] font-medium tabular-sm text-teal" : "font-mono text-[11px] font-medium tabular-sm text-amber"}>
+                {vessel.aisAnomaly}
+              </span>
             </div>
-            <div className="mt-1 flex items-center justify-between font-mono text-[10px] text-ink-dim">
-              <span>Heading alignment</span>
-              <span className="tnum">{vessel.headingAlignmentDeg}°</span>
-            </div>
-            <div className="mt-1 flex items-center justify-between font-mono text-[10px] text-ink-dim">
-              <span>Time overlap</span>
-              <span className="tnum">{vessel.timeOverlapMinutes} min</span>
-            </div>
-            <div className="mt-1 flex items-center justify-between font-mono text-[10px]">
-              <span className="text-ink-dim">AIS anomaly</span>
-              <span className={vessel.aisAnomaly === "None detected" ? "text-teal" : "text-amber"}>{vessel.aisAnomaly}</span>
-            </div>
-            <div className="mt-2 border-t border-line pt-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-ink-dim">Attribution score</span>
-                <span className="font-mono text-sm font-semibold text-aqua tnum">
-                  {(vessel.attributionScore * 100).toFixed(1)}
-                </span>
-              </div>
+            <div className="mt-2 flex items-center justify-between border-t border-line pt-2">
+              <span className="text-label-caps text-ink-faint">Attribution score</span>
+              <span className="font-mono text-sm font-semibold text-aqua tnum">
+                {(vessel.attributionScore * 100).toFixed(1)}%
+              </span>
             </div>
           </div>
         </div>

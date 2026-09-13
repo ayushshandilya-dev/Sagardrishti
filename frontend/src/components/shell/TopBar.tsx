@@ -15,6 +15,7 @@ import {
 import { useCommandStore } from "@/lib/store";
 import { bootstrapApp } from "@/lib/bootstrap";
 import { MOCK_SAT_PASSES } from "@/lib/mockData";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 
 const fmtUtc = (d: Date) =>
   `${d.toISOString().substring(11, 19)} UTC`;
@@ -109,12 +110,10 @@ export const TopBar: React.FC = () => {
         </div>
         <div className="leading-tight">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold tracking-wide text-ink">
+            <span className="text-title-sm font-semibold tracking-tight text-ink">
               SAGAR-DRISHTI <span className="text-ink-faint">V5</span>
             </span>
-            <span className="rounded bg-bg-2 px-1.5 py-px font-mono text-[9px] font-medium tracking-widest text-teal ring-1 ring-line">
-              ICG COMMAND
-            </span>
+            <StatusBadge label="ICG COMMAND" tone="ok" dot={false} />
           </div>
           <div className="meta flex items-center gap-1.5">
             <span>Indian Coast Guard</span>
@@ -126,15 +125,14 @@ export const TopBar: React.FC = () => {
         <div className="mx-1 h-6 w-px bg-line" />
 
         {/* Mission status */}
-        <div className="hidden xl:flex items-center gap-2 rounded-md bg-bg-2 px-2.5 py-1 ring-1 ring-line">
-          <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
-          <span className="font-mono text-[10px] font-semibold text-green">
-            MISSION NOMINAL
-          </span>
-          <span className="h-3 w-px bg-line" />
-          <span className="font-mono text-[10px] text-ink-dim">
-            DEFCON <span className="text-orange">2</span>
-          </span>
+        <div className="hidden xl:flex items-center gap-2">
+          <StatusBadge label="Mission Nominal" tone="ok" pulse />
+          <StatusBadge
+            label="DEFCON"
+            tone="warn"
+            dot={false}
+            index={2}
+          />
         </div>
       </div>
 
@@ -162,7 +160,7 @@ export const TopBar: React.FC = () => {
       <div className="flex items-center gap-2.5">
         <div className="flex items-center gap-2 rounded-md bg-bg-2 px-2.5 py-1 ring-1 ring-line">
           <Clock3 className="h-3.5 w-3.5 text-aqua" />
-          <div className="font-mono text-[10px] leading-tight text-ink-dim tnum">
+          <div className="text-telemetry-sm leading-tight text-ink-dim tnum">
             <div className="text-ink">{now ? fmtUtc(now) : "--:--:--"}</div>
             <div className="text-ink-faint">{now ? fmtIst(now) : "----"}</div>
           </div>
@@ -228,9 +226,9 @@ function Chip({
   return (
     <div className="flex items-center gap-1.5 rounded-md bg-bg-2 px-2 py-1 ring-1 ring-line">
       {icon}
-      <span className="font-mono text-[10px] text-ink-faint">{label}</span>
+      <span className="text-telemetry-sm text-ink-faint">{label}</span>
       <span
-        className={`font-mono text-[10px] font-semibold ${
+        className={`text-telemetry-sm font-semibold ${
           tone === "ok" ? "text-green" : "text-orange"
         }`}
       >
@@ -256,9 +254,9 @@ function PassChip({
   return (
     <div className="flex items-center gap-1.5 rounded-md bg-bg-2 px-2 py-1 ring-1 ring-line">
       {icon}
-      <div className="font-mono leading-tight">
-        <div className="text-[10px] text-ink-faint">{label}</div>
-        <div className="text-[10px] font-medium text-ink tnum">
+      <div className="text-telemetry-sm leading-tight">
+        <div className="text-ink-faint">{label}</div>
+        <div className="font-medium text-ink tnum">
           {value}
           <span className="ml-1 text-ink-faint">{hint}</span>
         </div>
