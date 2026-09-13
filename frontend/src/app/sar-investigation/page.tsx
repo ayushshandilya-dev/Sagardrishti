@@ -10,8 +10,7 @@ import { useInvestigation, TIMELINE } from "@/components/sar-investigation/useIn
 import { SentinelMap } from "@/components/sar-investigation/SentinelMap";
 import { ProductChip } from "@/components/sar-investigation/ProductChip";
 import { EvidenceInspector } from "@/components/sar-investigation/EvidenceInspector";
-import { TimelineDock } from "@/components/sar-investigation/TimelineDock";
-import {
+import { TimelineDock } from "@/components/sar-investigation/TimelineDock";import {
   ArrowLeft,
   ShieldCheck,
   Layers3,
@@ -157,6 +156,15 @@ export default function SarInvestigationPage() {
             inv={inv.state}
             reqBand={{ band: thumbBand, seq: thumbSeq }}
             className="absolute right-3 top-12 bottom-24 z-20"
+          />
+
+          {/* streaming processing log overlay (console-safe, deterministic) */}
+          <ProcessingLog
+            incident={incident}
+            inv={inv.state}
+            live={inv.playing}
+            phase={inv.state.phase}
+            className="absolute bottom-3 left-3 z-20"
           />
 
           {/* floating controls bar — handled by SentinelMap/VolumeScene internally */}
