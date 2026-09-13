@@ -13,6 +13,7 @@ export interface LogLine {
 }
 
 const LEVELS = ["info", "ok", "warn", "err"] as const;
+const now0 = Date.now();
 
 function hash(msg: string): number {
   let h = 2166136261;
@@ -21,6 +22,10 @@ function hash(msg: string): number {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
+}
+
+function fmt(offset: number): string {
+  return new Date(now0 - offset).toISOString().slice(11, 19);
 }
 
 function phaseDelta(phase: InvestigationState["phase"]): number {
@@ -51,47 +56,40 @@ export function ProcessingLog({
   inv: InvestigationState;
   className?: string;
 }) {
-  const [now, setNow] = useState(() => Date.now());
   const boxRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const h = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(h);
-  }, []);
-
   const lines = useMemo(() => {
-    const id = incident.eventId;
+    const base = hash(incident.eventId) & 0xffff;
     const d = phaseDelta(inv.phase);
-    const base = hash(id + inv.phase);
-    const fmt = (s: number) =>
-      new Date(now - s).toISOString().slice(11, 19);
-    const seedLines: LogLine[] = [
-      { id: base + 1, t: fmt(9800), level: "info", msg: "RAW SLC → σ0 · radiometric calibration (β0 ≈ σ0)" },
-      { id: base + 2, t: fmt(8600), level: "ok", msg: "VV / VH co-registered — slant-range 9.2 m, azimuth 14 m" },
-      { id: base + 3, t: fmt(7400), level: "info", msg: "multi-look 5×1 · equivalent number of looks 4.6" },
-      { id: base + 4, t: fmt(6200), level: "ok", msg: "Lee filter σ=0.9 · speckle reduced 62% (edge preserved)" },
-      { id: base + 5, t: fmt(5000), level: "info", msg: "GLCM offset (1,1) · contrast / energy window 7×7" },
-      { id: base + 6, t: fmt(3800), level: "info", msg: "CFAR-2D detector · p_fa 1e-5, guard 12px" },
-      { id: base + 7, t: fmt(2600), level: "ok", msg: "anomaly boxlocked · 412 px² candidate (σ>{{tonal}})" },
-      { id: base + 8, t: fmt(1400), level: "warn", msg: "edge fringe — coastline exclusion mask applied" },
+    const idN = (n: number) => base + n;
+    const log: LogLine[] = [
+      { id: idN(1), t: fmt(9800), level: "info", msg: "RAW SLC → sigma0 · radiometric calibration" },
+      { id: idN(2), t: fmt(8600), level: "ok", msg: "VV / VH co-registered · slant-range 9.2 m" },
+      { id: idN(3), t: fmt(7400), level: "info", msg: "multi-look 5x1 · ENL 4.6" },
+      { id: idN(4), t: fmt(6200), level: "ok", msg: "Lee filter σ=0.9 · speckle 62% reduced" },
+      { id: idN(5), t: fmt(5000), level: "info", msg: "GLCM offset (1,1) · 7x7 window" },
+      { id: idN(6), t: fmt(3800), level: "warn", msg: "CFAR-2D · p_fa 1e-5 · guard 12 px" },
     ];
-    const seg: LogLine[] = [
-      { id: base + 100, t: fmt(7200), level: "info", msg: "Otsu threshold τ = 0.31 · bimodality 0.89" },
-      { id: base + 101, t: fmt(5600), level: "ok", msg: "SLIC superpixels 512 → distance-weighted graph cut" },
-      { id: base + 102, t: fmt(3800), level: "info", msg: "morphology close(k=3) · hole fill" },
-    ];
-    const ver: LogLine[] = [
-      { id: base + 1000, t: fmt(9000), level: "ok", msg: "anchor A1 · probability 0.94 · σ = 26.3 dB" },
-      { id: base + 1001, t: fmt(7200), level: "info", msg: "anchor A2 · bearing 014° / range 11.2 km" },
-      { id: base + 1002, t: fmt(900), level: "err", msg: "Texturà · GLCM discrepancy (0.31) flagged ⚠" },
-    ];
-    const full: LogLine[] = [...seedLines];
-    if (d >= 3) full.push(seg[0], seg[1], seg[2]);
-    if (d >= 4) full.push(ver[0], ver[1]);
-    if (d >= 5) full.push(ver[2]);
-    void confirmLevel; // avoid unused lint noise
-    return full;
-  }, [incident.eventId, inv.phase, now]);
+    if (d >= 1) {
+      log.push({ id: idN(7), t: fmt(3000), level: "ok", msg: "anomaly boxlocked · candidate 412 px²" });
+    }
+    if (d >= 2) {
+      log.push({ id: idN(8), t: fmt(2400), level: "info", msg: "Otsu τ=0.31 · bimodality 0.89" });
+    }
+    if (d >= 3) {
+      log.push({ id: idN(9), t: fmt(1800), level: "ok", msg: "SLIC superpixel graph cut · 512 clusters" });
+      log.push({ id: idN(10), t: fmt(1200), level: "info", msg: "morphology close(k=3) · hole fill" });
+    }
+    if (d >= 4) {
+      log.push({ id: idN(11), t: fmt(900), level: "ok", msg: "anchor A1 · probe 0.94 · σ 26.3 dB" });
+      log.push({ id: idN(12), t: fmt(700), level: "info", msg: "anchor A2 · bearing 014° · 11.2 km" });
+      log.push({ id: idN(13), t: fmt(500), level: "warn", msg: "GLCM discrepancy 0.31 flagged" });
+    }
+    if (d >= 5) {
+      log.push({ id: idN(14), t: fmt(400), level: "ok", msg: "FINAL MASK verified · evidence anchored" });
+    }
+    return log;
+  }, [incident.eventId, inv.phase]);
 
   useEffect(() => {
     const el = boxRef.current;
@@ -101,7 +99,7 @@ export function ProcessingLog({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute bottom-3 left-3 top-3 w-[250px] select-none overflow-hidden rounded-lg border border-line bg-bg-2/90 font-mono text-[9px] text-ink backdrop-blur-md",
+        "pointer-events-none absolute bottom-3 left-3 top-3 w-[260px] select-none overflow-hidden rounded-lg border border-line bg-bg-2/90 font-mono text-[9px] text-ink backdrop-blur-md",
         className
       )}
     >
@@ -109,7 +107,7 @@ export function ProcessingLog({
         <span className="text-[9px] font-bold uppercase tracking-widest text-ink-dim">
           Processing Log
         </span>
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1 py-0.5">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal" />
           <span className="text-[8px] text-ink-faint">LIVE</span>
         </span>
@@ -137,8 +135,13 @@ export function ProcessingLog({
         ))}
       </div>
       <div className="border-t border-line px-2 py-1 text-[8px] text-ink-faint">
-        T+{(now - lines[0]?.id * 2000 + base_shift(lines[0]?.msg)).toFixed(0)}s
+        T+{((now0 - fmt_offset(lines)) / 1000).toFixed(0)} s
       </div>
     </div>
   );
 }
+
+function fmt_offset(lines: { id: number }[]): number {
+  return lines.length ? (lines[0]?.id & 0xffff) * 20 : 0;
+}
+</content>
