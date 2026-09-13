@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/util";
 import { Incident } from "@/lib/types";
 import type { InvestigationState } from "./useInvestigation";
@@ -35,7 +35,7 @@ function hashSeed(s: string): number {
   return h >>> 0;
 }
 
-function mulberry32(seed: number) {
+function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a |= 0;
@@ -51,6 +51,7 @@ function fmt(t: number): string {
 }
 
 const PHASE_DELTA: Record<InvestigationState["phase"], number> = {
+  idle: 0,
   footprint: 0,
   anomaly: 1,
   detect: 2,
@@ -78,25 +79,32 @@ function buildLines(
       msg,
     });
 
-  push("info", "uvicorn · RAW SLC ingest · λ 5.55 cm · GRD-IW");
-  push("ok", "radiometric calibration σ0 → β0 (VV/VH co-registered)");
-  push("info", "multi-look 5×1 · ENL 4.6 · 9.2 m slant");
+  push("info", "uvicorn · RAW SLC ingest · λ 5.55 cm · GRD-IW", 0);
+  push("ok", "radiometric calibration σ0 → β0 (VV/VH co-registered)", 1);
+  push("info", "multi-look 5×1 · ENL 4.6 · 9.2 m slant", 2);
 
   const d = PHASE_DELTA[inv.phase] ?? 0;
-  if (d >= 1) push("ok", "Lee sigma filter σ=0.9 · speckle −62%");
+  if (d >= 1) push("ok", "Lee sigma filter σ=0.9 · speckle −62%", 3);
   if (d >= 2) {
-    push("info", `CFAR-2D p_fa 1e-5 · guard 12 px · <strong>candidate 412 px²</strong>`);
-    push("warn", "edge fringe — coastal exclusion flagged");
+    push("info", "CFAR-2D p_fa 1e-5 · guard 12 px · candidate 412 px²", 4);
+    push("warn", "edge fringe flagged · coastal exclusion applied", 5);
   }
-  if (d >= 3) push("ok", "SLIC superpixel graph-cut · 512 clusters");
+  if (d >= 3) push("ok", "SLIC superpixel graph-cut · 512 clusters", 6);
   if (d >= 4) {
-    push("info", "GLCM contrast 0.74 · energy 0.31 (dual-pol)");
-    push("ok", `anchor A1 · σ=26.3 dB · p=0.94 · <span class="text-teal">VERIFIED</span>`);
+    push("info", "GLCM contrast 0.74 · energy 0.31 (dual-pol)", 7);
+    push("ok", "anchor A1 · σ=26.3 dB · p=0.94 · VERIFIED", 8);
   }
-  if (d >= 5) push("ok", "FINAL MASK anchored · evidence sealed");
-  if (live) push("ok", "live replay · scrubbing timeline");
+  if (d >= 5) push("ok", "FINAL MASK anchored · evidence sealed", 9);
+  if (live) push("ok", "live replay · scrubbing timeline", 10);
 
   return out;
+}
+
+export interface ProcessingLogProps {
+  incident: Incident;
+  inv: InvestigationState;
+  live?: boolean;
+  className?: string;
 }
 
 export function ProcessingLog({
@@ -104,12 +112,7 @@ export function ProcessingLog({
   inv,
   live = false,
   className,
-}: {
-  incident: Incident;
-  inv: InvestigationState;
-  live?: boolean;
-  className?: string;
-}) {
+}: ProcessingLogProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -149,7 +152,7 @@ export function ProcessingLog({
             <span className={cn("shrink-0 font-bold", LEVEL_COLOR[l.level])}>
               {LEVEL_ICON[l.level]}
             </span>
-            <span className="text-ink/90" dangerouslySetInnerHTML={{ __html: l.msg }} />
+            <span className="text-ink/90">{l.msg}</span>
           </div>
         ))}
       </div>

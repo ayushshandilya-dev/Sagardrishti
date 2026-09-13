@@ -164,7 +164,7 @@ export default function SarInvestigationPage() {
             incident={incident}
             inv={inv.state}
             live={inv.state.playing}
-            phase={inv.state.phase}
+
             className="absolute bottom-3 left-3 z-20"
           />
 
