@@ -92,7 +92,7 @@ const DEFAULT_LAYERS: MapLayersState = {
   drift: false,
   weather: true,
   currents: true,
-  bathy: true,
+  bathy: false,
   coast: true,
   sentinel: true,
 };

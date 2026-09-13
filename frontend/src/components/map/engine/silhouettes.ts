@@ -133,9 +133,9 @@ function deckDetails(kind: VesselKind, deck: string, accent: string): string {
 
 function navLights(): string {
   return `
-    <circle cx="5.05" cy="1.1" r="0.6" fill="#FF4B42" opacity="0.95" style="filter:drop-shadow(0 0 1.6px rgba(255,75,66,0.9))"/>
-    <circle cx="6.95" cy="1.1" r="0.6" fill="#47E57C" opacity="0.95" style="filter:drop-shadow(0 0 1.6px rgba(71,229,124,0.9))"/>
-    <circle cx="6" cy="74" r="0.55" fill="#E8F0F3" opacity="0.85"/>`;
+    <circle cx="5.05" cy="1.1" r="0.65" fill="#FF4B42" opacity="0.95" style="filter:drop-shadow(0 0 2.2px rgba(255,75,66,0.95))"/>
+    <circle cx="6.95" cy="1.1" r="0.65" fill="#47E57C" opacity="0.95" style="filter:drop-shadow(0 0 2.2px rgba(71,229,124,0.95))"/>
+    <circle cx="6" cy="74" r="0.55" fill="#E8F0F3" opacity="0.9" style="filter:drop-shadow(0 0 1.8px rgba(232,240,243,0.85))"/>`;
 }
 
 /**
@@ -145,20 +145,41 @@ function navLights(): string {
 export function shipSilhouette(v: CandidateVessel, accent: string): string {
   const k = vesselKind(v);
   const { px, pxW } = shipMetrics(v);
-  const hull = "#0a1420";
-  const deck = "#1b3a52";
+  const hull = "#08121d";
+  const deck = "#183448";
   return `
     <svg width="${pxW.toFixed(2)}" height="${px.toFixed(2)}" viewBox="0 0 ${VIEW_W} ${VIEW_H}"
-      style="display:block;overflow:visible"
+      style="display:block;overflow:visible;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.75))"
       preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-      ${hullPath(k, hull, accent)}
-      ${deckDetails(
-        k,
-        k === "tanker" || k === "bulk" ? deck : "#234d63",
-        accent
-      )}
-      ${navLights()}
+      <defs>
+        <filter id="hull-glow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1" stdDeviation="0.8" flood-color="#000000" flood-opacity="0.9"/>
+        </filter>
+      </defs>
+      <g filter="url(#hull-glow)">
+        ${hullPath(k, hull, accent)}
+        ${deckDetails(
+          k,
+          k === "tanker" || k === "bulk" ? deck : "#20465c",
+          accent
+        )}
+        ${navLights()}
+      </g>
     </svg>`;
+}
+
+/**
+ * Generate a dynamic trailing wake SVG based on vessel speed and beam
+ */
+export function generateVesselWake(v: CandidateVessel): string {
+  const speed = v.speedOverGround ?? 0;
+  if (speed < 1.0) return "";
+  const wakeLen = Math.min(80, 24 + speed * 3.8);
+  const wakeW = Math.min(28, 10 + speed * 1.1);
+  return `
+    <div style="transform: translateX(-50%) rotate(${v.heading + 180}deg); transform-origin: 50% 0%; width: ${wakeW}px; height: ${wakeLen}px; clip-path: polygon(50% 0%, 100% 100%, 0% 100%); background: linear-gradient(to bottom, rgba(125, 211, 252, 0.45), rgba(56, 189, 248, 0.12) 65%, transparent 100%); mix-blend-mode: screen;" class="absolute left-1/2 top-1/2 pointer-events-none opacity-85">
+      <div style="position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 10%, rgba(255,255,255,0.6), transparent 50%);"></div>
+    </div>`;
 }
 
 export function randomJitter(seed: number) {

@@ -91,32 +91,24 @@ uniform float uAlpha;
 ${GLSL_NOISE}
 void main(){
   vec2 ll = vLonLat;
-  /* depth increases away from the Kutch coast toward the Arabian Sea */
+  /* depth increases away from the Kutch coast toward the deep Arabian Sea basin */
   float shelf = 1.0 - clamp((ll.x - 67.0) / 3.6, 0.0, 1.0);      // 1 offshore (west) → 0 coast
   float latitude = clamp((23.8 - ll.y) / 3.4, 0.0, 1.0);        // south deepens
   float depth = clamp(shelf * 0.72 + latitude * 0.5, 0.0, 1.0);
   depth = mix(depth, fbm(ll * 5.3) * 0.18 + depth, 0.35);
   depth *= 0.72 + 0.28 * fbm(ll * 11.0 + uTime * 0.01);
 
-  vec3 shallow = vec3(0.09, 0.36, 0.48);
-  vec3 deep    = vec3(0.01, 0.05, 0.13);
-  vec3 col = mix(shallow, deep, smoothstep(0.0, 1.0, depth));
+  /* Depth contours and continental shelf break glow only — never wash out land or ocean */
+  float rim = 1.0 - smoothstep(0.0, 0.12, abs(shelf - 0.32));
+  float c20 = fract(depth * 22.0);
+  float line20 = 1.0 - smoothstep(0.0, 0.042, min(c20, 1.0 - c20));
 
-  /* continental-shelf rim — soft thermal edge */
-  float rim = 1.0 - smoothstep(0.0, 0.14, abs(shelf - 0.34));
-  col += vec3(0.10, 0.55, 0.60) * rim * 0.5;
+  vec3 col = mix(vec3(0.12, 0.65, 0.85), vec3(0.35, 0.88, 1.0), rim);
+  float lineAlpha = line20 * 0.38 + rim * 0.45;
 
-  /* depth contours — faint iso-lines every 8% of the column */
-  float c = fract(depth * 14.0);
-  float line = 1.0 - smoothstep(0.0, 0.045, min(c, 1.0 - c));
-  col += vec3(0.14, 0.62, 0.72) * line * 0.16;
-
-  /* slow caustic shimmer on the shelf */
-  float caustic = fbm(ll * 26.0 + vec2(uTime * 0.015, -uTime * 0.011));
-  col += vec3(0.10, 0.35, 0.40) * smoothstep(0.55, 0.95, caustic) * 0.25 * (1.0 - depth);
-
-  float alpha = uAlpha * (0.20 + 0.30 * depth);
-  gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
+  /* Zero alpha over land (shelf < 0.02) */
+  float alpha = uAlpha * lineAlpha * smoothstep(0.02, 0.15, shelf);
+  gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.85));
 }`;
 
 export function createBathymetryLayer(id: string): { layer: maplibregl.CustomLayerInterface; handle: LivingHandle } {
@@ -238,7 +230,7 @@ export function createParticleLayer(
   id: string,
   kind: "current" | "wind"
 ): { layer: maplibregl.CustomLayerInterface; handle: LivingHandle } {
-  const N = kind === "current" ? 1500 : 1100;
+  const N = kind === "current" ? 7500 : 3500;
   const rnd = seededRandom(kind === "current" ? 9173 : 4421);
   const [w, s, e, n] = AOI;
 
@@ -259,14 +251,32 @@ export function createParticleLayer(
     const lng = w + rnd() * (e - w);
     const lat = s + rnd() * (n - s);
     const m = merc([lng, lat]);
-    const jitter = (rnd() - 0.5) * 0.55;
-    const ang = baseRad + jitter;
+    const jitter = (rnd() - 0.5) * 0.45;
+
+    // Coastal hydrodynamic deflection around Gulf of Kutch
+    let ang = baseRad + jitter;
+    if (kind === "current") {
+      // Inside the Gulf channel (between lat 22.3 and 23.0, east of 69.0)
+      if (lng > 68.9 && lng < 70.3 && lat > 22.3 && lat < 23.05) {
+        // Strong tidal ingress channelling into Kandla & Mundra
+        const factor = Math.min(1.0, (lng - 68.9) / 0.8);
+        const channelRad = (108 * Math.PI) / 180;
+        ang = ang * (1.0 - factor) + (channelRad + jitter * 0.3) * factor;
+      } else if (lat < 22.35 && lng < 69.3) {
+        // Southern exit stream past Okha into the Arabian Sea
+        ang = (138 * Math.PI) / 180 + jitter * 0.35;
+      } else if (lat > 23.1) {
+        // Northern shallows near Kori Creek
+        ang = (124 * Math.PI) / 180 + jitter * 0.25;
+      }
+    }
+
     let dx = Math.sin(ang);
     let dy = Math.cos(ang);
     const len = Math.hypot(dx, dy) || 1;
     dx /= len; dy /= len;
     const phase = rnd();
-    const speed = (kind === "current" ? 0.09 : 0.11) * (0.6 + rnd() * 0.9);
+    const speed = (kind === "current" ? 0.095 : 0.12) * (0.65 + rnd() * 0.85);
     const seed = rnd();
     for (let v = 0; v < 2; v++) {
       const o = i * 2 + v;
@@ -1051,3 +1061,136 @@ void main(){
 
   return { layer, handle };
 }
+
+/* ═════════════════════════════════════════════════════════════
+   7. ENVIRONMENTAL HEATMAP — SST, Chlorophyll & Swell Gradients
+   ═════════════════════════════════════════════════════════════ */
+const ENV_FRAG = `
+precision mediump float;
+varying vec2 vLonLat;
+uniform float uTime;
+uniform float uAlpha;
+uniform float uKind; // 0: SST (thermal), 1: Chlorophyll (biogenic), 2: Wave Height
+${GLSL_NOISE}
+
+void main(){
+  vec2 ll = vLonLat;
+  // Offshore to coastal gradient
+  float coastal = clamp((ll.x - 67.0) / 3.4, 0.0, 1.0);
+  float latGrad = clamp((ll.y - 20.0) / 3.2, 0.0, 1.0);
+
+  vec3 col = vec3(0.0);
+  float alpha = 0.0;
+
+  // 0: Sea Surface Temperature (SST: 28.2°C to 30.2°C)
+  if (uKind < 0.5) {
+    float tempNorm = clamp(coastal * 0.65 + latGrad * 0.25 + fbm(ll * 4.0 + uTime * 0.005) * 0.15, 0.0, 1.0);
+    vec3 cool = vec3(0.12, 0.42, 0.72); // 28.2°C
+    vec3 mid  = vec3(0.92, 0.68, 0.18); // 29.2°C
+    vec3 warm = vec3(0.92, 0.22, 0.12); // 30.2°C
+    col = mix(cool, mid, smoothstep(0.0, 0.5, tempNorm));
+    col = mix(col, warm, smoothstep(0.5, 1.0, tempNorm));
+    // Soft thermal isolines
+    float iso = fract(tempNorm * 6.0);
+    float line = 1.0 - smoothstep(0.0, 0.05, min(iso, 1.0 - iso));
+    col = mix(col, vec3(1.0), line * 0.2);
+    alpha = uAlpha * 0.42;
+  }
+  // 1: Chlorophyll-a (biogenic bloom indicator: green/cyan estuarine plumes)
+  else if (uKind < 1.5) {
+    float inshore = smoothstep(68.8, 70.4, ll.x) * (1.0 - smoothstep(22.3, 23.2, ll.y));
+    float bloom = clamp(inshore * 0.75 + fbm(ll * 7.5 + uTime * 0.004) * 0.35, 0.0, 1.0);
+    vec3 lowBio  = vec3(0.04, 0.18, 0.28);
+    vec3 midBio  = vec3(0.08, 0.55, 0.38);
+    vec3 highBio = vec3(0.35, 0.88, 0.42);
+    col = mix(lowBio, midBio, smoothstep(0.1, 0.5, bloom));
+    col = mix(col, highBio, smoothstep(0.5, 1.0, bloom));
+    alpha = uAlpha * (0.15 + bloom * 0.45);
+  }
+  // 2: Wave Height Swell field
+  else {
+    float swell = clamp(1.0 - coastal * 0.75 + sin(ll.x * 12.0 + uTime * 0.1) * 0.1, 0.0, 1.0);
+    vec3 calm  = vec3(0.05, 0.25, 0.42);
+    vec3 heavy = vec3(0.20, 0.72, 0.88);
+    col = mix(calm, heavy, swell);
+    alpha = uAlpha * (0.2 + swell * 0.3);
+  }
+
+  gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.85));
+}`;
+
+export function createEnvironmentalHeatmapLayer(
+  id: string,
+  kind: "sst" | "chlorophyll" | "wave"
+): { layer: maplibregl.CustomLayerInterface; handle: LivingHandle } {
+  const { pos, lon, count } = quadBuffers(AOI);
+  let visible = false;
+  let alpha = 0.6;
+  let program: WebGLProgram | null = null;
+  let bPos: WebGLBuffer | null = null;
+  let bLon: WebGLBuffer | null = null;
+  let aPos = -1, aLon = -1;
+  let uM: WebGLUniformLocation | null = null;
+  let uT: WebGLUniformLocation | null = null;
+  let uA: WebGLUniformLocation | null = null;
+  let uKindLoc: WebGLUniformLocation | null = null;
+  let broken = false;
+
+  const kindFloat = kind === "sst" ? 0.0 : kind === "chlorophyll" ? 1.0 : 2.0;
+
+  const handle: LivingHandle = {
+    setVisible: (v) => (visible = v),
+    setAlpha: (a) => (alpha = a),
+    destroy: () => {},
+  };
+
+  const layer: maplibregl.CustomLayerInterface = {
+    id,
+    type: "custom",
+    renderingMode: "3d",
+    onAdd: (_map, gl) => {
+      owningMapRef = _map;
+      try {
+        program = buildProgram(gl, QUAD_VERT, ENV_FRAG);
+        if (!program) throw new Error("no program");
+        bPos = makeBuffer(gl, pos);
+        bLon = makeBuffer(gl, lon);
+        if (!bPos || !bLon) throw new Error("no buffer");
+        aPos = gl.getAttribLocation(program, "aPos");
+        aLon = gl.getAttribLocation(program, "aLonLat");
+        uM = gl.getUniformLocation(program, "uMatrix");
+        uT = gl.getUniformLocation(program, "uTime");
+        uA = gl.getUniformLocation(program, "uAlpha");
+        uKindLoc = gl.getUniformLocation(program, "uKind");
+      } catch (err) {
+        console.warn(`SD env layer ${kind} unavailable:`, err);
+        broken = true;
+      }
+    },
+    render: (gl, args) => {
+      if (broken || !visible || alpha <= 0.002 || !program) return;
+      gl.useProgram(program);
+      bindAttribs(gl, [
+        { loc: aPos, buffer: bPos, size: 2 },
+        { loc: aLon, buffer: bLon, size: 2 },
+      ]);
+      gl.uniformMatrix4fv(uM, false, args.modelViewProjectionMatrix);
+      gl.uniform1f(uT, performance.now() / 1000);
+      gl.uniform1f(uA, alpha);
+      gl.uniform1f(uKindLoc, kindFloat);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.disable(gl.DEPTH_TEST);
+      gl.drawArrays(gl.TRIANGLES, 0, count);
+      owningMapRef?.triggerRepaint();
+    },
+    onRemove: (_map, gl) => {
+      if (bPos) gl.deleteBuffer(bPos);
+      if (bLon) gl.deleteBuffer(bLon);
+      if (program) gl.deleteProgram(program);
+    },
+  };
+
+  return { layer, handle };
+}
+
