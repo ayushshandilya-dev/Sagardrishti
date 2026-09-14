@@ -7,6 +7,8 @@ import { TopBar } from "@/components/shell/TopBar";
 import { StatusStrip } from "@/components/shell/StatusStrip";
 import { Bootstrap } from "@/components/shell/Bootstrap";
 
+import { DemoDirectorBar } from "@/components/demo/DemoDirectorBar";
+
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
@@ -41,7 +43,10 @@ export default function RootLayout({
         <StatusStrip />
         <div className="flex flex-1 overflow-hidden">
           <CommandRail />
-          <main className="flex-1 overflow-hidden relative">{children}</main>
+          <main className="flex-1 overflow-hidden relative">
+            {children}
+            <DemoDirectorBar />
+          </main>
         </div>
       </body>
     </html>
