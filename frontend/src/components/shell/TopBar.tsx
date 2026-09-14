@@ -30,7 +30,7 @@ export const TopBar: React.FC = () => {
   const router = useRouter();
   const [now, setNow] = useState<Date | null>(null);
 
-  const { isDemoRunning, demoStep, startDemo, resetDemo, dataSource } =
+  const { isDemoRunning, demoStep, isDemoPaused, startDemo, resetDemo, dataSource } =
     useCommandStore();
 
   const [latency, setLatency] = useState(42);
@@ -60,46 +60,7 @@ export const TopBar: React.FC = () => {
 
   const runDemo = () => {
     startDemo();
-    router.prefetch("/sar-investigation");
     router.push("/operations");
-    /* 1 → 2: Sentinel-1 Detection Event runs ON the Operations map (≈7s) */
-    setTimeout(() => {
-      useCommandStore.setState({ demoStep: 2 });
-    }, 4500);
-    setTimeout(() => {
-      useCommandStore.setState({ demoStep: 3 });
-      router.push("/sar-investigation");
-    }, 11900);
-    /* stage 3 dwells on the SAR investigation workstation */
-    setTimeout(() => {
-      useCommandStore.setState((st) => ({
-        demoStep: 4,
-        isDriftPlaying: true,
-        layers: { ...st.layers, drift: true },
-      }));
-      router.push("/drift");
-    }, 28000);
-    setTimeout(() => {
-      useCommandStore.setState((st) => ({
-        demoStep: 5,
-        currentDriftHour: 12,
-        layers: { ...st.layers, drift: true },
-      }));
-      router.push("/attribution");
-    }, 33000);
-    setTimeout(() => {
-      useCommandStore.setState({ demoStep: 6 });
-      router.push("/vessels/9123456");
-    }, 38000);
-    setTimeout(() => {
-      useCommandStore.setState({ demoStep: 7, hasVerified: true });
-      router.push("/evidence");
-    }, 43000);
-    setTimeout(() => {
-      useCommandStore.getState().setLayer("drift", false);
-      resetDemo();
-      router.push("/dossier");
-    }, 49000);
   };
 
   return (
@@ -210,22 +171,48 @@ export const TopBar: React.FC = () => {
           DATA {dataSource}
         </button>
 
-        <div className="flex items-center gap-1 rounded-lg bg-bg-2 p-1 ring-1 ring-line-active">
-          <button
-            onClick={runDemo}
-            disabled={isDemoRunning}
-            className="flex items-center gap-1.5 rounded-md px-2.5 py-1 font-mono text-[10px] font-semibold transition-colors disabled:cursor-default disabled:opacity-90 bg-bg-1 text-ink hover:bg-panel-hover focus-ring"
-          >
-            <Play className={`h-3 w-3 text-teal ${isDemoRunning ? "animate-pulse" : ""}`} />
-            {isDemoRunning ? `STAGE ${demoStep}/7` : "DEMO MODE"}
-          </button>
-          <button
-            onClick={resetDemo}
-            className="rounded-md p-1 text-ink-faint transition-colors hover:bg-bg-1 hover:text-ink focus-ring"
-            title="Reset demo state"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-          </button>
+        {/* ── HIGH-VISIBILITY MISSION DEMO LAUNCHPAD ── */}
+        <div className="flex items-center gap-1.5">
+          {!isDemoRunning ? (
+            <button
+              onClick={runDemo}
+              className="group relative flex items-center gap-2 rounded-lg border border-teal/50 bg-gradient-to-r from-teal/20 via-aqua/15 to-blue/20 px-3 py-1.5 font-mono text-xs font-bold text-teal shadow-[0_0_18px_rgba(34,211,167,0.25)] transition-all hover:border-teal hover:bg-teal/25 hover:shadow-[0_0_24px_rgba(34,211,167,0.45)] focus-ring active:scale-95"
+              title="Launch 8-Stage Autonomous Mission Walkthrough"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-teal"></span>
+              </span>
+              <Play className="h-3.5 w-3.5 fill-teal text-teal group-hover:scale-110 transition-transform" />
+              <span className="tracking-wide">MISSION DEMO</span>
+              <span className="rounded bg-teal/25 px-1.5 py-0.5 text-[9px] font-mono text-ink tracking-normal">
+                8 STAGES
+              </span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 rounded-lg border border-teal/40 bg-bg-2 p-1 ring-1 ring-teal/30 shadow-[0_0_15px_rgba(34,211,167,0.2)]">
+              <button
+                onClick={() => useCommandStore.getState().toggleDemoPause()}
+                className="flex items-center gap-1.5 rounded-md bg-teal/20 px-2.5 py-1 font-mono text-[10px] font-bold text-teal hover:bg-teal/30 transition-colors"
+                title={isDemoPaused ? "Click to resume autopilot" : "Click to pause timer"}
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isDemoPaused ? "bg-amber" : "bg-teal"} opacity-75`}></span>
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isDemoPaused ? "bg-amber" : "bg-teal"}`}></span>
+                </span>
+                <span>{isDemoPaused ? "PAUSED" : "LIVE DEMO"}</span>
+                <span className="text-ink-dim">·</span>
+                <span className="text-amber">S{demoStep}/8</span>
+              </button>
+              <button
+                onClick={resetDemo}
+                className="rounded-md p-1 text-ink-faint transition-colors hover:bg-red/20 hover:text-red focus-ring"
+                title="Exit demo mode"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

@@ -75,9 +75,12 @@ interface CommandStore {
   // Demo choreography (SIH walkthrough)
   isDemoRunning: boolean;
   demoStep: number;
+  isDemoPaused: boolean;
   startDemo: () => void;
   resetDemo: () => void;
   setDemoStep: (step: number) => void;
+  setDemoPaused: (paused: boolean) => void;
+  toggleDemoPause: () => void;
 
   // Stage-2 "Sentinel-1 Detection Event" timeline cursor (ms since start, null when inactive)
   detectionMs: number | null;
@@ -156,17 +159,21 @@ export const useCommandStore = create<CommandStore>((set, get) => ({
 
   isDemoRunning: false,
   demoStep: 0,
+  isDemoPaused: false,
   detectionMs: null,
-  startDemo: () => set({ isDemoRunning: true, demoStep: 1 }),
+  startDemo: () => set({ isDemoRunning: true, demoStep: 1, isDemoPaused: false }),
   resetDemo: () =>
     set({
       isDemoRunning: false,
       demoStep: 0,
+      isDemoPaused: false,
       detectionMs: null,
       currentDriftHour: 0,
       isDriftPlaying: false,
       hasVerified: false,
     }),
   setDemoStep: (step) => set({ demoStep: step }),
+  setDemoPaused: (paused) => set({ isDemoPaused: paused }),
+  toggleDemoPause: () => set((state) => ({ isDemoPaused: !state.isDemoPaused })),
   setDetectionMs: (ms) => set({ detectionMs: ms }),
 }));

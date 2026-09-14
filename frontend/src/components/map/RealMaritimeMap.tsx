@@ -1344,47 +1344,6 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
         </div>
       )}
 
-      {/* ── MISSION DEMO TIMELINE & STORY NARRATION (Bottom Center) ── */}
-      {isDemoRunning && (
-        <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 z-20 w-fit rounded-xl border border-line bg-bg-1/95 px-4 py-2.5 shadow-float backdrop-blur-md">
-          <div className="mb-1.5 flex items-center justify-between font-mono text-[9px] uppercase tracking-widest text-ink-faint">
-            <span>Operational Storyline</span>
-            <span className="text-amber font-bold">STAGE {demoStep} / 8</span>
-          </div>
-          <div className="h-1 w-full min-w-[420px] overflow-hidden rounded-full bg-bg-2">
-            <div
-              className="h-full bg-amber transition-all duration-500"
-              style={{ width: `${Math.max(4, (demoStep / 8) * 100)}%` }}
-            />
-          </div>
-          <div className="mt-2 flex items-center gap-1.5">
-            {(["INGEST", "SWEEP", "SPILL", "CURRENTS", "BACKTRACK", "ORIGIN", "SUSPECT", "LEDGER"] as const).map(
-              (label, i) => {
-                const step = i + 1;
-                const done = demoStep > step;
-                const cur = demoStep === step;
-                return (
-                  <div
-                    key={label}
-                    className={`flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[9px] tracking-wide transition-all duration-300 ${
-                      done
-                        ? "bg-aqua/20 text-aqua font-semibold"
-                        : cur
-                          ? "bg-amber/20 text-amber font-bold ring-1 ring-amber/60"
-                          : "text-ink-faint"
-                    }`}
-                  >
-                    {done ? "✓" : cur ? "▶" : "·"} {label}
-                  </div>
-                );
-              }
-            )}
-          </div>
-          <p className="mt-2 text-[10px] font-mono text-ink-dim max-w-md">
-            {ANALYST_LINES[demoStep] ?? "Monitoring Indian Coast Guard operational theatre."}
-          </p>
-        </div>
-      )}
 
       {/* Alert toast */}
       {alert && (
