@@ -176,6 +176,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
   const detectionMs = store.detectionMs;
   const hasVerified = store.hasVerified;
   const merkleRoot = store.evidenceLedger?.merkleRoot;
+  const currentDriftHour = store.currentDriftHour;
 
   const [mapLoaded, setMapLoaded] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
@@ -232,6 +233,88 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
   useEffect(() => {
     sheenRef.current?.setMode(contaminationMode);
   }, [contaminationMode]);
+
+  /* Dynamic RK4 Drift Playhead & Slick Contraction */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || !incident) return;
+
+    const traj = store.driftResult?.trajectory;
+    if (!traj || traj.length === 0) return;
+
+    const stepRatio = Math.min(1, Math.max(0, currentDriftHour / 12));
+    const targetIdx = Math.min(traj.length - 1, Math.floor(stepRatio * (traj.length - 1)));
+    const pt = traj[targetIdx];
+    if (!pt) return;
+
+    const uncertaintyRadius = 0.4 + stepRatio * 2.8;
+
+    const headGeoJson: GeoJSON.Feature<GeoJSON.Point> = {
+      type: "Feature",
+      properties: { hour: currentDriftHour, uncertainty: uncertaintyRadius },
+      geometry: { type: "Point", coordinates: [pt.longitude, pt.latitude] },
+    };
+
+    const headSource = map.getSource("drift-head") as maplibregl.GeoJSONSource | undefined;
+    if (headSource) {
+      headSource.setData(headGeoJson);
+    } else {
+      map.addSource("drift-head", {
+        type: "geojson",
+        data: headGeoJson,
+      });
+
+      map.addLayer({
+        id: "drift-head-uncertainty",
+        type: "circle",
+        source: "drift-head",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 8 * (1 + stepRatio), 11, 22 * (1 + stepRatio)],
+          "circle-color": "#38BDF8",
+          "circle-opacity": 0.2,
+          "circle-stroke-width": 1.2,
+          "circle-stroke-color": "#38BDF8",
+        },
+      });
+
+      map.addLayer({
+        id: "drift-head-marker",
+        type: "circle",
+        source: "drift-head",
+        paint: {
+          "circle-radius": 5.5,
+          "circle-color": "#22D3A7",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#050B11",
+        },
+      });
+    }
+
+    // Dynamic slick morphing: scale down towards the backtrack point
+    if (incident.spillGeometry?.polygonGeoJson?.coordinates?.[0]) {
+      const baseCoords: number[][] = incident.spillGeometry.polygonGeoJson.coordinates[0];
+      const obsCentroid = [incident.spillGeometry.centroid.longitude, incident.spillGeometry.centroid.latitude];
+      const scale = 1.0 - stepRatio * 0.8;
+
+      const transformedCoords = baseCoords.map(([lng, lat]) => {
+        const relLng = lng - obsCentroid[0];
+        const relLat = lat - obsCentroid[1];
+        return [
+          pt.longitude + relLng * scale,
+          pt.latitude + relLat * scale,
+        ];
+      });
+
+      const polySource = map.getSource("oil-poly") as maplibregl.GeoJSONSource | undefined;
+      if (polySource) {
+        polySource.setData({
+          type: "Feature",
+          properties: { eventId: incident.eventId },
+          geometry: { type: "Polygon", coordinates: [transformedCoords] },
+        });
+      }
+    }
+  }, [currentDriftHour, mapLoaded, incident, store.driftResult]);
 
   /* ═══════════════════════════════════════════════════════════
      BASE GEO LAYERS & GIS INFRASTRUCTURE

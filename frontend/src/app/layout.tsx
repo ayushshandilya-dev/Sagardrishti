@@ -6,6 +6,7 @@ import { CommandRail } from "@/components/shell/CommandRail";
 import { TopBar } from "@/components/shell/TopBar";
 import { StatusStrip } from "@/components/shell/StatusStrip";
 import { Bootstrap } from "@/components/shell/Bootstrap";
+import { CommandPalette } from "@/components/shell/CommandPalette";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -37,6 +38,7 @@ export default function RootLayout({
     >
       <body className="h-full w-full overflow-hidden bg-bg-0 text-ink font-sans flex flex-col antialiased">
         <Bootstrap />
+        <CommandPalette />
         <TopBar />
         <StatusStrip />
         <div className="flex flex-1 overflow-hidden">

@@ -7,6 +7,8 @@ import { CandidateVessel, RiskBadge } from "@/lib/types";
 import { Trophy, Ship, Timer, Target, Navigation } from "lucide-react";
 import { SourceTag, sourceLabel } from "@/components/attribution/SourceTag";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { NumberTicker } from "@/components/ui/NumberTicker";
+import { motion } from "framer-motion";
 
 const BADGE_TONE: Record<RiskBadge, "crit" | "warn" | "neutral"> = {
   PRIMARY: "crit",
@@ -16,8 +18,13 @@ const BADGE_TONE: Record<RiskBadge, "crit" | "warn" | "neutral"> = {
 
 export function ScoreBar({ v }: { v: number }) {
   return (
-    <div className="h-1 w-14 overflow-hidden rounded-full bg-bg-0 ring-1 ring-line">
-      <div className="h-full rounded-full bg-aqua" style={{ width: `${v * 100}%` }} />
+    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-bg-0 ring-1 ring-line">
+      <motion.div
+        initial={{ width: 0 }}
+        animate={{ width: `${v * 100}%` }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="h-full rounded-full bg-aqua"
+      />
     </div>
   );
 }
@@ -32,19 +39,29 @@ export const AttributionRanking: React.FC<{ vessels: CandidateVessel[] }> = ({ v
         const active = v.imo === selectedVesselImo;
         const rank = i + 1;
         return (
-          <button
+          <motion.button
             key={v.imo}
+            layout
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, delay: i * 0.04 }}
             onClick={() => setSelectedVesselImo(v.imo)}
             className={cn(
-              "w-full rounded-panel border px-3 py-2.5 text-left transition-colors duration-150 focus-ring",
-              active ? "border-aqua/40 bg-bg-2" : "border-line bg-bg-1 hover:bg-bg-2"
+              "w-full rounded-panel border px-3 py-2.5 text-left transition-all duration-150 focus-ring relative overflow-hidden",
+              active
+                ? "border-aqua/60 bg-bg-2 shadow-sm ring-1 ring-aqua/30"
+                : "border-line bg-bg-1 hover:border-line-active hover:bg-bg-2"
             )}
           >
+            {active && (
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-aqua rounded-r" />
+            )}
+
             <div className="flex items-center gap-2.5">
               <span
                 className={cn(
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded font-mono text-[11px] font-bold",
-                  rank === 1 ? "bg-red/10 text-red ring-1 ring-red/40" : "bg-bg-0 text-ink-dim ring-1 ring-line"
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded font-mono text-[11px] font-bold transition-colors",
+                  rank === 1 ? "bg-red/15 text-red ring-1 ring-red/40" : "bg-bg-0 text-ink-dim ring-1 ring-line"
                 )}
               >
                 {String(rank).padStart(2, "0")}
@@ -65,7 +82,7 @@ export const AttributionRanking: React.FC<{ vessels: CandidateVessel[] }> = ({ v
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
                 <span className="font-mono text-sm font-semibold text-ink tnum">
-                  {(v.attributionScore * 100).toFixed(1)}
+                  <NumberTicker value={v.attributionScore * 100} decimals={1} />%
                 </span>
                 <ScoreBar v={v.attributionScore} />
               </div>
@@ -85,20 +102,22 @@ export const AttributionRanking: React.FC<{ vessels: CandidateVessel[] }> = ({ v
                 <Timer className="h-3 w-3 text-ink-faint" />
                 {v.timeOverlapMinutes} min
               </span>
-              <span className={cn(
-                "flex items-center gap-1 text-telemetry-sm",
-                v.aisAnomaly === "None detected" ? "text-ink-faint" : "text-amber"
-              )}>
+              <span
+                className={cn(
+                  "flex items-center gap-1 text-telemetry-sm",
+                  v.aisAnomaly === "None detected" ? "text-ink-faint" : "text-amber font-semibold"
+                )}
+              >
                 <Ship className="h-3 w-3" />
                 {v.aisAnomaly === "None detected" ? "AIS clean" : v.aisAnomaly}
               </span>
             </div>
-          </button>
+          </motion.button>
         );
       })}
       <div className="flex items-center gap-1.5 px-1 pt-1 text-[9px] text-ink-faint">
         <Trophy className="h-3 w-3 text-amber" />
-        Rank-1 flagged for enforcement review
+        Rank-1 flagged for enforcement review & legal dossier export
       </div>
     </div>
   );

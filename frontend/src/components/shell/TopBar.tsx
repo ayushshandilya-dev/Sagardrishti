@@ -11,11 +11,13 @@ import {
   Waves,
   CloudSun,
   Activity,
+  Search,
 } from "lucide-react";
 import { useCommandStore } from "@/lib/store";
 import { bootstrapApp } from "@/lib/bootstrap";
 import { MOCK_SAT_PASSES } from "@/lib/mockData";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { NumberTicker } from "@/components/ui/NumberTicker";
 
 const fmtUtc = (d: Date) =>
   `${d.toISOString().substring(11, 19)} UTC`;
@@ -158,6 +160,18 @@ export const TopBar: React.FC = () => {
 
       {/* Right cluster */}
       <div className="flex items-center gap-2.5">
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+          className="hidden md:flex items-center gap-2 rounded-md bg-bg-2 px-2.5 py-1 ring-1 ring-line hover:ring-line-active text-ink-dim hover:text-ink transition-colors focus-ring"
+          title="Open Command Palette (Ctrl+K)"
+        >
+          <Search className="h-3.5 w-3.5 text-aqua" />
+          <span className="text-telemetry-sm">Quick Jump</span>
+          <kbd className="rounded border border-line bg-bg-0 px-1 font-mono text-[9px] text-ink-faint">
+            Ctrl+K
+          </kbd>
+        </button>
+
         <div className="flex items-center gap-2 rounded-md bg-bg-2 px-2.5 py-1 ring-1 ring-line">
           <Clock3 className="h-3.5 w-3.5 text-aqua" />
           <div className="text-telemetry-sm leading-tight text-ink-dim tnum">
@@ -166,12 +180,18 @@ export const TopBar: React.FC = () => {
           </div>
         </div>
 
-        <Chip
-        icon={<Activity className="h-3.5 w-3.5 text-teal" />}
-        label="LATENCY"
-        value={`${latency} ms`}
-        tone={latency < 60 ? "ok" : "warn"}
-      />
+        <div className="flex items-center gap-1.5 rounded-md bg-bg-2 px-2 py-1 ring-1 ring-line">
+          <Activity className="h-3.5 w-3.5 text-teal" />
+          <span className="text-telemetry-sm text-ink-faint">LATENCY</span>
+          <span
+            className={`text-telemetry-sm font-semibold flex items-center gap-1 ${
+              latency < 60 ? "text-green" : "text-orange"
+            }`}
+          >
+            <NumberTicker value={latency} />
+            <span className="text-[10px]">ms</span>
+          </span>
+        </div>
 
         <button
           onClick={() => void bootstrapApp()}
