@@ -1,0 +1,9 @@
+# Exclude dev/CI artifacts from Vercel builds
+node_modules/.cache
+.next
+out
+coverage
+test-results
+playwright-report
+*.tsbuildinfo
+.env*.local

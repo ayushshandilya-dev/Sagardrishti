@@ -1,0 +1,29 @@
+# Sagar-Drishti API — Render Blueprint (free tier)
+# Import: Render Dashboard → New → Blueprint Instance → select repo.
+# After first deploy, set the three env vars listed below (Sync: No), then redeploy.
+#
+# The database lives on Neon (free, always-on, no 30-day expiry). Keep it OUT of
+# Render's managed Postgres — its free DB expires after 30 days.
+#
+#   DATABASE_URL      = your Neon connection string  (postgresql://...?sslmode=require)
+#   CORS_ORIGINS      = your Vercel console URL       (https://<project>.vercel.app)
+#   NODE_SIGNING_KEY  = 64 hex chars (generate: openssl rand -hex 32)
+
+services:
+  - type: web
+    name: sagar-drishti-api
+    runtime: python
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    buildCommand: pip install -r requirements-api.txt
+    startCommand: bash start.sh
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: NODE_SIGNING_KEY
+        sync: false
+      - key: API_ENV
+        value: production
