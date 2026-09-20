@@ -77,11 +77,16 @@ interface CommandStore {
   isDemoPaused: boolean;
   demoStep: number;
   isSpeechEnabled: boolean;
+  isDemoRunning: boolean;
+  isDemoPaused: boolean;
+  demoStep: number;
   startDemo: () => void;
   resetDemo: () => void;
   togglePauseDemo: () => void;
   toggleSpeech: () => void;
   setDemoStep: (step: number) => void;
+  setDemoPaused: (paused: boolean) => void;
+  toggleDemoPause: () => void;
 
   // Stage-2 "Sentinel-1 Detection Event" timeline cursor (ms since start, null when inactive)
   detectionMs: number | null;
@@ -162,6 +167,9 @@ export const useCommandStore = create<CommandStore>((set, get) => ({
   isDemoPaused: false,
   demoStep: 0,
   isSpeechEnabled: false,
+  isDemoRunning: false,
+  isDemoPaused: false,
+  demoStep: 0,
   detectionMs: null,
   startDemo: () => set({ isDemoRunning: true, isDemoPaused: false, demoStep: 1 }),
   resetDemo: () =>
@@ -169,6 +177,7 @@ export const useCommandStore = create<CommandStore>((set, get) => ({
       isDemoRunning: false,
       isDemoPaused: false,
       demoStep: 0,
+      isDemoPaused: false,
       detectionMs: null,
       currentDriftHour: 0,
       isDriftPlaying: false,
@@ -177,5 +186,7 @@ export const useCommandStore = create<CommandStore>((set, get) => ({
   togglePauseDemo: () => set((state) => ({ isDemoPaused: !state.isDemoPaused })),
   toggleSpeech: () => set((state) => ({ isSpeechEnabled: !state.isSpeechEnabled })),
   setDemoStep: (step) => set({ demoStep: step }),
+  setDemoPaused: (paused) => set({ isDemoPaused: paused }),
+  toggleDemoPause: () => set((state) => ({ isDemoPaused: !state.isDemoPaused })),
   setDetectionMs: (ms) => set({ detectionMs: ms }),
 }));

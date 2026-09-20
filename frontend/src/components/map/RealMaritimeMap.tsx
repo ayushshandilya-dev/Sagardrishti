@@ -176,6 +176,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
   const detectionMs = store.detectionMs;
   const hasVerified = store.hasVerified;
   const merkleRoot = store.evidenceLedger?.merkleRoot;
+  const currentDriftHour = store.currentDriftHour;
 
   const [mapLoaded, setMapLoaded] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
@@ -232,6 +233,88 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
   useEffect(() => {
     sheenRef.current?.setMode(contaminationMode);
   }, [contaminationMode]);
+
+  /* Dynamic RK4 Drift Playhead & Slick Contraction */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || !incident) return;
+
+    const traj = store.driftResult?.trajectory;
+    if (!traj || traj.length === 0) return;
+
+    const stepRatio = Math.min(1, Math.max(0, currentDriftHour / 12));
+    const targetIdx = Math.min(traj.length - 1, Math.floor(stepRatio * (traj.length - 1)));
+    const pt = traj[targetIdx];
+    if (!pt) return;
+
+    const uncertaintyRadius = 0.4 + stepRatio * 2.8;
+
+    const headGeoJson: GeoJSON.Feature<GeoJSON.Point> = {
+      type: "Feature",
+      properties: { hour: currentDriftHour, uncertainty: uncertaintyRadius },
+      geometry: { type: "Point", coordinates: [pt.longitude, pt.latitude] },
+    };
+
+    const headSource = map.getSource("drift-head") as maplibregl.GeoJSONSource | undefined;
+    if (headSource) {
+      headSource.setData(headGeoJson);
+    } else {
+      map.addSource("drift-head", {
+        type: "geojson",
+        data: headGeoJson,
+      });
+
+      map.addLayer({
+        id: "drift-head-uncertainty",
+        type: "circle",
+        source: "drift-head",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 8 * (1 + stepRatio), 11, 22 * (1 + stepRatio)],
+          "circle-color": "#38BDF8",
+          "circle-opacity": 0.2,
+          "circle-stroke-width": 1.2,
+          "circle-stroke-color": "#38BDF8",
+        },
+      });
+
+      map.addLayer({
+        id: "drift-head-marker",
+        type: "circle",
+        source: "drift-head",
+        paint: {
+          "circle-radius": 5.5,
+          "circle-color": "#22D3A7",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#050B11",
+        },
+      });
+    }
+
+    // Dynamic slick morphing: scale down towards the backtrack point
+    if (incident.spillGeometry?.polygonGeoJson?.coordinates?.[0]) {
+      const baseCoords: number[][] = incident.spillGeometry.polygonGeoJson.coordinates[0];
+      const obsCentroid = [incident.spillGeometry.centroid.longitude, incident.spillGeometry.centroid.latitude];
+      const scale = 1.0 - stepRatio * 0.8;
+
+      const transformedCoords = baseCoords.map(([lng, lat]) => {
+        const relLng = lng - obsCentroid[0];
+        const relLat = lat - obsCentroid[1];
+        return [
+          pt.longitude + relLng * scale,
+          pt.latitude + relLat * scale,
+        ];
+      });
+
+      const polySource = map.getSource("oil-poly") as maplibregl.GeoJSONSource | undefined;
+      if (polySource) {
+        polySource.setData({
+          type: "Feature",
+          properties: { eventId: incident.eventId },
+          geometry: { type: "Polygon", coordinates: [transformedCoords] },
+        });
+      }
+    }
+  }, [currentDriftHour, mapLoaded, incident, store.driftResult]);
 
   /* ═══════════════════════════════════════════════════════════
      BASE GEO LAYERS & GIS INFRASTRUCTURE
@@ -1379,47 +1462,6 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
         </div>
       )}
 
-      {/* ── MISSION DEMO TIMELINE & STORY NARRATION (Bottom Center) ── */}
-      {isDemoRunning && (
-        <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 z-20 w-fit rounded-xl border border-line bg-bg-1/95 px-4 py-2.5 shadow-float backdrop-blur-md">
-          <div className="mb-1.5 flex items-center justify-between font-mono text-[9px] uppercase tracking-widest text-ink-faint">
-            <span>Operational Storyline</span>
-            <span className="text-amber font-bold">STAGE {demoStep} / 8</span>
-          </div>
-          <div className="h-1 w-full min-w-[420px] overflow-hidden rounded-full bg-bg-2">
-            <div
-              className="h-full bg-amber transition-all duration-500"
-              style={{ width: `${Math.max(4, (demoStep / 8) * 100)}%` }}
-            />
-          </div>
-          <div className="mt-2 flex items-center gap-1.5">
-            {(["INGEST", "SWEEP", "SPILL", "CURRENTS", "BACKTRACK", "ORIGIN", "SUSPECT", "LEDGER"] as const).map(
-              (label, i) => {
-                const step = i + 1;
-                const done = demoStep > step;
-                const cur = demoStep === step;
-                return (
-                  <div
-                    key={label}
-                    className={`flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[9px] tracking-wide transition-all duration-300 ${
-                      done
-                        ? "bg-aqua/20 text-aqua font-semibold"
-                        : cur
-                          ? "bg-amber/20 text-amber font-bold ring-1 ring-amber/60"
-                          : "text-ink-faint"
-                    }`}
-                  >
-                    {done ? "✓" : cur ? "▶" : "·"} {label}
-                  </div>
-                );
-              }
-            )}
-          </div>
-          <p className="mt-2 text-[10px] font-mono text-ink-dim max-w-md">
-            {ANALYST_LINES[demoStep] ?? "Monitoring Indian Coast Guard operational theatre."}
-          </p>
-        </div>
-      )}
 
       {/* Alert toast */}
       {alert && (

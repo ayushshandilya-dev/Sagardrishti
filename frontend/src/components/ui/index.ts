@@ -11,3 +11,4 @@ export * from "./InspectorList";
 export * from "./LayerChip";
 export * from "./Timeline";
 export * from "./typography";
+export * from "./NumberTicker";

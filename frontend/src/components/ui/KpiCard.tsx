@@ -2,6 +2,8 @@ import React from "react";
 import { Card } from "./Card";
 import { StatusBadge, StatusTone, TONE_HEX } from "./StatusBadge";
 
+import { NumberTicker } from "./NumberTicker";
+
 interface KpiCardProps {
   label: string;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
@@ -25,6 +27,16 @@ export const KpiCard: React.FC<KpiCardProps> = ({
   footer,
   className = "",
 }) => {
+  const renderedValue =
+    typeof value === "number" ? (
+      <NumberTicker
+        value={value}
+        decimals={Number.isInteger(value) ? 0 : 2}
+      />
+    ) : (
+      value
+    );
+
   return (
     <Card accent={TONE_HEX[tone]} interactive className={className}>
       <div className="flex items-center justify-between gap-2">
@@ -37,7 +49,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({
         {badge && <StatusBadge label={badge} tone={tone} dot={false} />}
       </div>
       <div className="mt-2 flex items-baseline gap-1.5 text-telemetry-lg">
-        <span className="tabular-sm text-ink">{value}</span>
+        <span className="tabular-sm text-ink">{renderedValue}</span>
         {unit && (
           <span className="font-mono text-[11px] font-normal text-ink-faint">
             {unit}

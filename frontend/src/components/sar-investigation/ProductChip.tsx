@@ -251,6 +251,16 @@ export const ProductChip: React.FC<ProductChipProps> = ({ incident, inv, reqBand
               />
             )}
             {compare && (
+              <>
+                <div className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-bg-0/80 px-1.5 py-0.5 font-mono text-[8px] font-semibold text-ink-dim ring-1 ring-line backdrop-blur-sm">
+                  RAW BASE
+                </div>
+                <div className="pointer-events-none absolute right-2 top-2 z-10 rounded bg-bg-0/80 px-1.5 py-0.5 font-mono text-[8px] font-semibold text-teal ring-1 ring-teal/30 backdrop-blur-sm">
+                  {effBand}
+                </div>
+              </>
+            )}
+            {compare && (
               <input
                 type="range"
                 min={0}
@@ -266,8 +276,8 @@ export const ProductChip: React.FC<ProductChipProps> = ({ incident, inv, reqBand
                 className="pointer-events-none absolute inset-y-0"
                 style={{ left: `${divider * 100}%` }}
               >
-                <div className="absolute inset-y-0 left-0 w-px bg-aqua" />
-                <div className="absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-0.5 rounded bg-bg-1 px-1 py-0.5 ring-1 ring-aqua/50">
+                <div className="absolute inset-y-0 left-0 w-px bg-aqua shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
+                <div className="absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-0.5 rounded bg-bg-1 px-1 py-0.5 ring-1 ring-aqua/60 shadow-lg">
                   <ScanLine className="h-3 w-3 rotate-90 text-aqua" />
                   <ScanLine className="h-3 w-3 -rotate-90 text-aqua" />
                 </div>
