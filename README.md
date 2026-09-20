@@ -158,24 +158,40 @@ SQLite (`data/sagar_drishti.db`); set `DATABASE_URL` to Postgres for production.
 
 ---
 
-## Deploying to the public internet
+## Deploying to the public internet (100% free)
 
-**Backend + database** (Render / Railway), then **console** (Vercel). The console
-auto-detects a reachable backend and switches LIVE — otherwise it runs self-contained
-(SIMULATED).
+Frontend on **Vercel Hobby**, database on **Neon** (serverless Postgres), backend on
+**Render free tier**. Total cost: $0. The console auto-detects a reachable backend and
+switches LIVE — otherwise it runs self-contained (SIMULATED), so the demo never breaks.
 
-### Backend on Render
-1. New **Web Service** → connect the GitHub repo → directory root, build `pip install -r requirements-api.txt`, start `uvicorn api.main:app --host 0.0.0.0 --port 10000`.
-2. Add a **PostgreSQL** database (Render free tier) and set:
-   - `DATABASE_URL` = the Postgres URI
-   - `CORS_ORIGINS` = your Vercel URL
-   - `NODE_SIGNING_KEY` = a fresh hex key (32 bytes)
-3. Deploy. Seed data auto-loads on first boot (`/health` → `"database":"up"`).
+| Tier    | Where              | Notes                                                             |
+|---------|--------------------|-------------------------------------------------------------------|
+| Console | Vercel Hobby       | Always-on, free. Root dir `frontend`.                             |
+| Database | Neon (free)       | Serverless Postgres, always-on, no expiry.                        |
+| API     | Render (free)     | Sleeps after ~15 min idle, wakes on request. Free Postgres has a 30-day expiry — use Neon instead. |
 
-### Console on Vercel
-1. New project → same repo → **root directory: `frontend`**, framework **Next.js**.
-2. Add env var `NEXT_PUBLIC_API_URL` = `https://<your-render-api>/`.
-3. Deploy. The bootstrap pings `/health`; if CORS/reachability fails it degrades to SIMULATED rather than breaking the demo.
+### 1. Database — Neon
+1. Sign up at neon.tech → **Create project** (region near you) → copy the **connection string**.
+2. It looks like `postgresql://user:password@ep-xxxx.region.aws.neon.tech/neondb?sslmode=require`.
+
+### 2. Backend — Render
+1. **New Web Service** → connect the GitHub repo → default branch.
+2. Build: `pip install -r requirements-api.txt` — Start: `bash start.sh`.
+3. Env vars:
+   - `DATABASE_URL` = the Neon connection string above
+   - `CORS_ORIGINS` = your Vercel URL (e.g. `https://sagar-drishti.vercel.app`)
+   - `NODE_SIGNING_KEY` = fresh 64-hex key
+4. Deploy. First boot seeds incidents/vessels/ledger automatically; verify `https://<your-app>.onrender.com/health` → `"database":"up"`.
+
+### 3. Console — Vercel
+1. **Import Project** → same repo → **Root Directory: `frontend`**, framework Next.js.
+2. Env var: `NEXT_PUBLIC_API_URL=https://<your-app>.onrender.com/`.
+3. Deploy.
+
+### Prefer zero-sleep, no-cold-start hosting? (still free)
+**Oracle Cloud Always Free** (4×ARM cores, 24 GB RAM, always-free Autonomous Postgres) runs the
+API 24/7 without spin-down — needs a credit card and ~20 min of one-time setup, then it never
+bills. The API's `PORT`-aware `start.sh` works there too.
 
 ### Secrets
 Postgres URI and signing keys live in the host platform's config (never the repo).

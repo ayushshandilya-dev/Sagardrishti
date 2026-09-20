@@ -114,6 +114,10 @@ async def get_metocean_conditions() -> dict[str, Any]:
 
 
 if __name__ == "__main__":
+    import os
+
     import uvicorn
 
-    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
+    # Honour the host platform's PORT injection (Render/Railway/Koyeb convention).
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run("api.main:app", host="0.0.0.0", port=port, reload=os.getenv("RELOAD", "0") == "1")
