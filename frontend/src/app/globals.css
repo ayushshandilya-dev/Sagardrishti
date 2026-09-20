@@ -193,6 +193,13 @@
 }
 
 /* ── MOTION PRIMITIVES ─────────────────────────────────────── */
+
+/* Ship/asset DOM markers always sit above the map's canvas overlays
+   (particles, sonar pulses) so overlays never bury the fleet. */
+.maplibregl-marker {
+  z-index: 5;
+}
+
 @keyframes drift-dash {
   to { stroke-dashoffset: -20; }
 }

@@ -6,6 +6,7 @@ import { CommandRail } from "@/components/shell/CommandRail";
 import { TopBar } from "@/components/shell/TopBar";
 import { StatusStrip } from "@/components/shell/StatusStrip";
 import { Bootstrap } from "@/components/shell/Bootstrap";
+import { DemoChoreographerBanner } from "@/components/shell/DemoChoreographerBanner";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -38,6 +39,7 @@ export default function RootLayout({
       <body className="h-full w-full overflow-hidden bg-bg-0 text-ink font-sans flex flex-col antialiased">
         <Bootstrap />
         <TopBar />
+        <DemoChoreographerBanner />
         <StatusStrip />
         <div className="flex flex-1 overflow-hidden">
           <CommandRail />

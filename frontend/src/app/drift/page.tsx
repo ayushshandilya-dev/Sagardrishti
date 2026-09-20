@@ -8,13 +8,15 @@ import { LayerChips } from "@/components/map/LayerChips";
 import { TimelineDock } from "@/components/drift/TimelineDock";
 import { OriginInspector } from "@/components/drift/OriginInspector";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { ArrowRight, MapPin } from "lucide-react";
+import { ArrowRight, MapPin, Waves } from "lucide-react";
+import { RealSpillAnimationModal } from "@/components/gallery/RealSpillAnimationModal";
 
 export default function ReverseDriftPage() {
   const { selectedIncidentId, incidents, currentDriftHour, driftResult } =
     useCommandStore();
   const incident = incidents.find((i) => i.eventId === selectedIncidentId) ?? incidents[0];
   const origin = driftResult?.reconstructedOrigin;
+  const [showSpillAnimationModal, setShowSpillAnimationModal] = React.useState(false);
 
   /* The RK4 layer is off by default — enable it for this workspace */
   useEffect(() => {
@@ -34,6 +36,14 @@ export default function ReverseDriftPage() {
         subtitle={`Trajectory backtrack for ${incident.eventId} · observation ${incident.timestampUtc} UTC`}
         right={
           <>
+            <button
+              onClick={() => setShowSpillAnimationModal(true)}
+              className="flex items-center gap-1.5 rounded-md bg-teal/10 px-3 py-1.5 text-xs font-semibold text-teal ring-1 ring-teal/30 transition-colors duration-150 hover:bg-teal/20 focus-ring"
+              title="Open live 60 FPS hydrodynamic RK4 particle advection simulation"
+            >
+              <Waves className="h-3.5 w-3.5 animate-pulse" />
+              SPILL ANIMATION
+            </button>
             <div className="hidden items-center gap-2 rounded-md bg-bg-1 px-3 py-1.5 ring-1 ring-line sm:flex">
               <MapPin className="h-3.5 w-3.5 text-amber" />
               <span className="text-telemetry-md text-ink tnum">
@@ -66,6 +76,11 @@ export default function ReverseDriftPage() {
         {/* timeline dock (bottom-center) */}
         <TimelineDock />
       </div>
+
+      {/* Real Hydrodynamic Oil Spill Physics Animation Modal */}
+      {showSpillAnimationModal && (
+        <RealSpillAnimationModal onClose={() => setShowSpillAnimationModal(false)} />
+      )}
     </div>
   );
 }

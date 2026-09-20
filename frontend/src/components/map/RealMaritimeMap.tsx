@@ -813,11 +813,12 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
      ═══════════════════════════════════════════════════════════ */
   function addLivingOverlayStacks(map: maplibregl.Map) {
     const inc = incident;
+    const anchor = map.getLayer("oil-sheen-webgl") ? "oil-sheen-webgl" : undefined;
 
     try {
       const g = createBathymetryLayer("bathy-relief");
       if (map.getLayer("bathy-relief")) map.removeLayer("bathy-relief");
-      map.addLayer(g.layer);
+      map.addLayer(g.layer, anchor);
       livingRef.current.bathy = g.handle;
       g.handle.setVisible(layers.bathy);
       g.handle.setAlpha(0.42);
@@ -828,7 +829,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     try {
       const c = createParticleLayer("particles-current", "current");
       if (map.getLayer("particles-current")) map.removeLayer("particles-current");
-      map.addLayer(c.layer);
+      map.addLayer(c.layer, anchor);
       livingRef.current.currents = c.handle;
       c.handle.setVisible(layers.currents);
     } catch (err) {
@@ -838,7 +839,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     try {
       const w = createParticleLayer("particles-wind", "wind");
       if (map.getLayer("particles-wind")) map.removeLayer("particles-wind");
-      map.addLayer(w.layer);
+      map.addLayer(w.layer, anchor);
       livingRef.current.wind = w.handle;
       w.handle.setVisible(layers.weather);
       w.handle.setAlpha(0.55);
@@ -849,7 +850,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     try {
       const lf = createLaneFlowLayer("lanes-flow", SHIPPING_LANES);
       if (map.getLayer("lanes-flow")) map.removeLayer("lanes-flow");
-      map.addLayer(lf.layer);
+      map.addLayer(lf.layer, anchor);
       livingRef.current.laneFlow = lf.handle;
       lf.handle.setVisible(layers.shipping);
     } catch (err) {
@@ -864,7 +865,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
       }));
       const pl = createPortLightLayer("port-lights", beacons);
       if (map.getLayer("port-lights")) map.removeLayer("port-lights");
-      map.addLayer(pl.layer);
+      map.addLayer(pl.layer, anchor);
       livingRef.current.portLights = pl.handle;
       pl.handle.setAlpha(0.65);
     } catch (err) {
@@ -883,7 +884,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     try {
       const sw = createSwathSweepLayer("sentinel-sweep");
       if (map.getLayer("sentinel-sweep")) map.removeLayer("sentinel-sweep");
-      map.addLayer(sw.layer);
+      map.addLayer(sw.layer, anchor);
       swathRef.current = sw.handle;
       sw.handle.setVisible(layers.sentinel);
       sw.handle.setAlpha(isDemoRunning && demoStep <= 2 ? 0.65 : 0);
@@ -1170,6 +1171,122 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     }
   }, [selectedPortNode, containerSize, readout]);
 
+  /* ── 60 FPS MAP ANIMATION ENGINE (PARTICLES, SONAR PULSES, SATELLITE SCAN, RK4 DRIFT) ── */
+  useEffect(() => {
+    const canvas = particlesRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animFrameId: number;
+
+    const numParticles = 350;
+    const particles = Array.from({ length: numParticles }, () => ({
+      x: Math.random() * containerSize.w,
+      y: Math.random() * containerSize.h,
+      vx: (Math.random() - 0.7) * 1.6,
+      vy: (Math.random() - 0.5) * 0.9,
+      size: 1 + Math.random() * 1.5,
+      type: Math.random() > 0.4 ? "current" : "wind",
+    }));
+
+    let pulseRadius = 0;
+
+    const renderMapCanvas = () => {
+      const W = containerSize.w;
+      const H = containerSize.h;
+      if (W <= 0 || H <= 0) return;
+
+      canvas.width = W;
+      canvas.height = H;
+      ctx.clearRect(0, 0, W, H);
+
+      const map = mapRef.current;
+
+      // 1. Vessel Radar Sonar Pulse Rings
+      pulseRadius = (pulseRadius + 0.4) % 42;
+      const vesselList = propVessels ?? store.candidateVessels;
+
+      vesselList.forEach((vessel) => {
+        if (map) {
+          try {
+            const pt = map.project([vessel.longitude, vessel.latitude]);
+            const isSuspect = vessel.attributionRank === 1;
+
+            ctx.strokeStyle = isSuspect
+              ? "rgba(239, 68, 68, 0.75)"
+              : "rgba(56, 189, 248, 0.45)";
+            ctx.lineWidth = isSuspect ? 2 : 1;
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, pulseRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            if (isSuspect) {
+              ctx.strokeStyle = "rgba(245, 158, 11, 0.6)";
+              ctx.beginPath();
+              ctx.arc(pt.x, pt.y, (pulseRadius + 16) % 42, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+          } catch {}
+        }
+      });
+
+      // 2. RK4 Reverse Drift Flow & Origin Convergence Target Ring
+      if (layers.drift && incident) {
+        try {
+          const c = incident.spillGeometry.centroid;
+          const origin = store.driftResult?.reconstructedOrigin;
+          if (map && origin) {
+            const ptObs = map.project([c.longitude, c.latitude]);
+            const ptOrig = map.project([origin.longitude, origin.latitude]);
+
+            ctx.strokeStyle = "rgba(56, 189, 248, 0.7)";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 6]);
+            ctx.beginPath();
+            ctx.moveTo(ptObs.x, ptObs.y);
+            ctx.lineTo(ptOrig.x, ptOrig.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.strokeStyle = "#22D3A7";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(ptOrig.x, ptOrig.y, 14 + Math.sin(Date.now() * 0.006) * 5, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = "rgba(34, 211, 167, 0.2)";
+            ctx.fill();
+          }
+        } catch {}
+      }
+
+      // 3. Hydrodynamic Currents & Windage Stream Particles
+      if (layers.currents || layers.weather || layers.drift) {
+        particles.forEach((p) => {
+          p.x += p.vx;
+          p.y += p.vy;
+
+          if (p.x < 0) p.x = W;
+          if (p.x > W) p.x = 0;
+          if (p.y < 0) p.y = H;
+          if (p.y > H) p.y = 0;
+
+          ctx.fillStyle =
+            p.type === "current"
+              ? "rgba(56, 189, 248, 0.55)"
+              : "rgba(245, 158, 11, 0.55)";
+          ctx.fillRect(p.x, p.y, p.size, p.size);
+        });
+      }
+
+      animFrameId = requestAnimationFrame(renderMapCanvas);
+    };
+
+    renderMapCanvas();
+    return () => cancelAnimationFrame(animFrameId);
+  }, [containerSize, layers, incident, propVessels, store.candidateVessels, store.driftResult]);
+
   const zoomIn = () => mapRef.current?.zoomIn({ duration: 200 });
   const zoomOut = () => mapRef.current?.zoomOut({ duration: 200 });
   const reset = () => {
@@ -1179,6 +1296,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
   return (
     <div className={`relative h-full w-full overflow-hidden bg-bg-0 ${interactive ? "select-none" : ""}`}>
       <div ref={containerRef} className="absolute inset-0 h-full w-full" />
+      <canvas ref={particlesRef} className="pointer-events-none absolute inset-0 z-[2] h-full w-full" />
 
       {/* ── CRISP PERIMETER VIGNETTE (Keeps map satellite colors 100% vivid & untouched) ── */}
       <div

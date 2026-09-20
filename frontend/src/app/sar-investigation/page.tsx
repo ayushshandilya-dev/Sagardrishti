@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -15,7 +15,9 @@ import { ProcessingLog } from "@/components/sar-investigation/ProcessingLog";imp
   ArrowLeft,
   ShieldCheck,
   Layers3,
+  Satellite,
 } from "lucide-react";
+import { RealSarDemoModal } from "@/components/gallery/RealSarDemoModal";
 
 const VolumeScene = dynamic(
   () =>
@@ -24,10 +26,11 @@ const VolumeScene = dynamic(
 );
 
 export default function SarInvestigationPage() {
-  const { incidents } = useCommandStore();
+  const { incidents, demoStep } = useCommandStore();
   const incident = incidents[0]; // demo streamlines to one
   const inv = useInvestigation();
   const [volumeMode, setVolumeMode] = useState(false);
+  const [showSarDemoModal, setShowSarDemoModal] = useState(false);
   const [thumbSeq, setThumbSeq] = useState(0);
   const [thumbBand, setThumbBand] = useState<SarBand>("FINAL MASK");
   const didRun = useRef(false);
@@ -120,9 +123,18 @@ export default function SarInvestigationPage() {
           </span>
         </div>
 
+        <button
+          onClick={() => setShowSarDemoModal(true)}
+          className="ml-2 flex items-center gap-1.5 rounded-md bg-aqua/10 px-2 py-1.5 font-mono text-[9px] font-semibold text-aqua ring-1 ring-aqua/30 transition-colors hover:bg-aqua/15 focus-ring"
+          title="Open interactive Sentinel-1 C-band SAR processing workstation demo"
+        >
+          <Satellite className="h-3 w-3" />
+          REAL SAR DEMO
+        </button>
+
         <Link
           href="/drift"
-          className="ml-2 flex items-center gap-1.5 rounded-md bg-teal/10 px-2 py-1.5 font-mono text-[9px] font-semibold text-teal ring-1 ring-teal/30 transition-colors hover:bg-teal/15 focus-ring"
+          className="flex items-center gap-1.5 rounded-md bg-teal/10 px-2 py-1.5 font-mono text-[9px] font-semibold text-teal ring-1 ring-teal/30 transition-colors hover:bg-teal/15 focus-ring"
         >
           <ShieldCheck className="h-3 w-3" />
           RK4 DRIFT
@@ -188,6 +200,10 @@ export default function SarInvestigationPage() {
           onThumb={onThumb}
         />
       </div>
+      {/* Real SAR Processing Demo Workstation Modal */}
+      {showSarDemoModal && (
+        <RealSarDemoModal onClose={() => setShowSarDemoModal(false)} />
+      )}
     </div>
   );
 }

@@ -12,6 +12,9 @@ import {
   Image,
   Globe,
   Check,
+  Satellite,
+  Waves,
+  HelpCircle,
   ChevronDown,
 } from "lucide-react";
 import { ExportFormat } from "@/types/gallery";
@@ -23,6 +26,9 @@ interface GalleryHeaderProps {
   onToggleJudgeMode: () => void;
   onExport: (format: ExportFormat) => void;
   activeStageNumber: number;
+  onOpenRealSarDemo: () => void;
+  onOpenRealSpillAnimation: () => void;
+  onOpenJuryFaq?: () => void;
 }
 
 export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
@@ -32,6 +38,9 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
   onToggleJudgeMode,
   onExport,
   activeStageNumber,
+  onOpenRealSarDemo,
+  onOpenRealSpillAnimation,
+  onOpenJuryFaq,
 }) => {
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
   const [copiedCaption, setCopiedCaption] = useState<boolean>(false);
@@ -72,8 +81,40 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
         </div>
       </div>
 
-      {/* Right Controls (Present to Judges & Export) */}
-      <div className="flex items-center gap-3">
+      {/* Right Controls */}
+      <div className="flex items-center gap-2.5">
+        {/* REAL SAR DEMO Button */}
+        <button
+          onClick={onOpenRealSarDemo}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-aqua/40 bg-aqua/10 text-xs font-mono font-semibold text-aqua transition-all hover:bg-aqua/20 hover:border-aqua focus:outline-none shadow-sm"
+          title="Open interactive Sentinel-1 C-band SAR processing workstation demo"
+        >
+          <Satellite className="h-3.5 w-3.5" />
+          <span>REAL SAR DEMO</span>
+        </button>
+
+        {/* SPILL ANIMATION Button */}
+        <button
+          onClick={onOpenRealSpillAnimation}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal/40 bg-teal/10 text-xs font-mono font-semibold text-teal transition-all hover:bg-teal/20 hover:border-teal focus:outline-none shadow-sm"
+          title="Open 60 FPS hydrodynamic RK4 particle advection simulation"
+        >
+          <Waves className="h-3.5 w-3.5 animate-pulse" />
+          <span>SPILL ANIMATION</span>
+        </button>
+
+        {/* JURY FAQ Button */}
+        {onOpenJuryFaq && (
+          <button
+            onClick={onOpenJuryFaq}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber/40 bg-amber/10 text-xs font-mono font-semibold text-amber transition-all hover:bg-amber/20 hover:border-amber focus:outline-none shadow-sm"
+            title="Open SIH Jury Interrogation Assistant & FAQ workstation"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            <span>JURY FAQ</span>
+          </button>
+        )}
+
         {/* Export Dropdown Menu */}
         <div className="relative">
           <button

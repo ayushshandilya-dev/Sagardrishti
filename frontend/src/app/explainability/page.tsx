@@ -10,6 +10,9 @@ import { GalleryExplanationPanel } from "@/components/gallery/GalleryExplanation
 import { GalleryTimeline } from "@/components/gallery/GalleryTimeline";
 import { JudgePresentationModal } from "@/components/gallery/JudgePresentationModal";
 import { ExportModal } from "@/components/gallery/ExportModal";
+import { RealSarDemoModal } from "@/components/gallery/RealSarDemoModal";
+import { RealSpillAnimationModal } from "@/components/gallery/RealSpillAnimationModal";
+import { JuryFaqModal } from "@/components/gallery/JuryFaqModal";
 
 export default function ExplainabilityGalleryPage() {
   // Currently active comparison stage ID
@@ -27,6 +30,11 @@ export default function ExplainabilityGalleryPage() {
 
   // Judge Presentation Mode toggle
   const [isJudgeMode, setIsJudgeMode] = useState<boolean>(false);
+
+  // Real Demo Modals state
+  const [showRealSarDemo, setShowRealSarDemo] = useState<boolean>(false);
+  const [showRealSpillAnimation, setShowRealSpillAnimation] = useState<boolean>(false);
+  const [showJuryFaq, setShowJuryFaq] = useState<boolean>(false);
 
   // Active Export Modal state
   const [exportFormat, setExportFormat] = useState<ExportFormat | null>(null);
@@ -60,6 +68,9 @@ export default function ExplainabilityGalleryPage() {
         onToggleJudgeMode={() => setIsJudgeMode(!isJudgeMode)}
         onExport={(fmt) => setExportFormat(fmt)}
         activeStageNumber={activeComparison.stageNumber}
+        onOpenRealSarDemo={() => setShowRealSarDemo(true)}
+        onOpenRealSpillAnimation={() => setShowRealSpillAnimation(true)}
+        onOpenJuryFaq={() => setShowJuryFaq(true)}
       />
 
       {/* Main Center Layout Grid */}
@@ -113,6 +124,21 @@ export default function ExplainabilityGalleryPage() {
           }
           onClose={() => setIsJudgeMode(false)}
         />
+      )}
+
+      {/* Real Sentinel-1 SAR Demo Workstation Modal */}
+      {showRealSarDemo && (
+        <RealSarDemoModal onClose={() => setShowRealSarDemo(false)} />
+      )}
+
+      {/* Real Oil Spill Hydrodynamic Simulation Modal */}
+      {showRealSpillAnimation && (
+        <RealSpillAnimationModal onClose={() => setShowRealSpillAnimation(false)} />
+      )}
+
+      {/* SIH Jury Interrogation Assistant & FAQ Modal */}
+      {showJuryFaq && (
+        <JuryFaqModal onClose={() => setShowJuryFaq(false)} />
       )}
 
       {/* Export Modal */}

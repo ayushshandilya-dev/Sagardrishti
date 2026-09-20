@@ -58,46 +58,7 @@ export const TopBar: React.FC = () => {
 
   const runDemo = () => {
     startDemo();
-    router.prefetch("/sar-investigation");
     router.push("/operations");
-    /* 1 → 2: Sentinel-1 Detection Event runs ON the Operations map (≈7s) */
-    setTimeout(() => {
-      useCommandStore.setState({ demoStep: 2 });
-    }, 4500);
-    setTimeout(() => {
-      useCommandStore.setState({ demoStep: 3 });
-      router.push("/sar-investigation");
-    }, 11900);
-    /* stage 3 dwells on the SAR investigation workstation */
-    setTimeout(() => {
-      useCommandStore.setState((st) => ({
-        demoStep: 4,
-        isDriftPlaying: true,
-        layers: { ...st.layers, drift: true },
-      }));
-      router.push("/drift");
-    }, 28000);
-    setTimeout(() => {
-      useCommandStore.setState((st) => ({
-        demoStep: 5,
-        currentDriftHour: 12,
-        layers: { ...st.layers, drift: true },
-      }));
-      router.push("/attribution");
-    }, 33000);
-    setTimeout(() => {
-      useCommandStore.setState({ demoStep: 6 });
-      router.push("/vessels/9123456");
-    }, 38000);
-    setTimeout(() => {
-      useCommandStore.setState({ demoStep: 7, hasVerified: true });
-      router.push("/evidence");
-    }, 43000);
-    setTimeout(() => {
-      useCommandStore.getState().setLayer("drift", false);
-      resetDemo();
-      router.push("/dossier");
-    }, 49000);
   };
 
   return (
@@ -197,7 +158,7 @@ export const TopBar: React.FC = () => {
             className="flex items-center gap-1.5 rounded-md px-2.5 py-1 font-mono text-[10px] font-semibold transition-colors disabled:cursor-default disabled:opacity-90 bg-bg-1 text-ink hover:bg-panel-hover focus-ring"
           >
             <Play className={`h-3 w-3 text-teal ${isDemoRunning ? "animate-pulse" : ""}`} />
-            {isDemoRunning ? `STAGE ${demoStep}/7` : "DEMO MODE"}
+            {isDemoRunning ? `STAGE ${demoStep}/8` : "DEMO MODE"}
           </button>
           <button
             onClick={resetDemo}
