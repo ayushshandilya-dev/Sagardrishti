@@ -1,0 +1,151 @@
+"""Persistence layer for the Sagar-Drishti API.
+
+A deliberately thin document/entity store (Postgres in production, SQLite by
+default) with lightweight relational rows for the parts that benefit from it:
+
+  * ``incidents``   – SAR oil-spill detection events (full scene JSON)
+  * ``vessels``     – monitored AIS vessels / attribution candidates
+  * ``metocean``    – single active INCOIS/ECMWF surface vector snapshot
+  * ``ledger_blocks`– tamper-evident Merkle ledger chain blocks (chain-order)
+  * ``drift_runs``  – audit trail of every RK4 backtrack computation
+  * ``attribution_runs`` – audit trail of every candidate scoring computation
+
+The engine is created from ``Settings.database_url``; tables are created on
+startup (``init_db``) and seeded idempotently (``api.seed``).
+"""
+from __future__ import annotations
+
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from typing import Any
+
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    create_engine,
+)
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+from api.config import get_settings
+
+Base = declarative_base()
+
+
+class IncidentRow(Base):
+    """A detected SAR oil-spill event with its full scene payload."""
+
+    __tablename__ = "incidents"
+
+    event_id = Column(String, primary_key=True)
+    severity = Column(String, nullable=False, index=True)
+    data = Column(JSON, nullable=False)
+
+
+class VesselRow(Base):
+    """A monitored AIS vessel (attribution candidates included)."""
+
+    __tablename__ = "vessels"
+
+    mmsi = Column(Integer, primary_key=True)
+    data = Column(JSON, nullable=False)
+
+
+class MetOceanRow(Base):
+    """Single active surface metocean snapshot."""
+
+    __tablename__ = "metocean"
+
+    id = Column(Integer, primary_key=True)
+    updated_utc = Column(DateTime(timezone=True), nullable=False)
+    data = Column(JSON, nullable=False)
+
+
+class LedgerBlockRow(Base):
+    """A single block in the tamper-evident Merkle evidence chain."""
+
+    __tablename__ = "ledger_blocks"
+
+    block_hash = Column(String, primary_key=True)
+    index = Column(Integer, nullable=False)
+    data = Column(JSON, nullable=False)
+
+
+class DriftRunRow(Base):
+    """Persisted reverse-Lagrangian (RK4) backtrack computation."""
+
+    __tablename__ = "drift_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_utc = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    max_hours = Column(Float, nullable=False)
+    request = Column(JSON, nullable=False)
+    result = Column(JSON, nullable=False)
+
+
+class AttributionRunRow(Base):
+    """Persisted candidate-vessel scoring computation."""
+
+    __tablename__ = "attribution_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_utc = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    request = Column(JSON, nullable=False)
+    result = Column(JSON, nullable=False)
+
+
+class Database:
+    """Lazy engine/session holder so importing modules never touches I/O."""
+
+    def __init__(self) -> None:
+        self._engine = None  # type: ignore[assignment]
+        self._session = None  # type: ignore[assignment]
+
+    def connect(self) -> None:
+        settings = get_settings()
+        kwargs: dict[str, Any] = {}
+        if settings.database_url.startswith("sqlite"):
+            kwargs["connect_args"] = {"check_same_thread": False}
+        self._engine = create_engine(settings.database_url, pool_pre_ping=True, **kwargs)
+        self._session = sessionmaker(bind=self._engine, autoflush=False, expire_on_commit=False)
+
+    @property
+    def engine(self):
+        if self._engine is None:
+            self.connect()
+        return self._engine
+
+    @property
+    def session(self):
+        if self._session is None:
+            self.connect()
+        return self._session
+
+    def create_all(self) -> None:
+        Base.metadata.create_all(bind=self.engine)
+
+    @contextmanager
+    def session_scope(self) -> Iterator:
+        session = self.session()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+
+db = Database()
+
+
+def init_db() -> None:
+    """Create tables if they do not exist (no-op when already present)."""
+    db.create_all()

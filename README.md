@@ -27,18 +27,23 @@ The command console (`frontend/`) is a React + MapLibre GL command center that r
 .
 ├── main.py                      # Entry point: `pipeline`, `api`, `dashboard`, `test`
 ├── requirements.txt             # Full backend dependency manifest (heavy — see below)
-├── docker-compose.yml           # Optional Docker stack (backend + dashboard [+ console])
-├── docker/Dockerfile            # Backend image (python:3.11-slim + GDAL geospatial stack)
+├── requirements-api.txt         # Slim runtime deps for the API image (no GDAL/torch)
+├── docker-compose.yml           # Production stack: Postgres + API + dashboard [+ console]
+├── docker/Dockerfile            # Dashboard image (python:3.11-slim + GDAL geospatial stack)
 ├── Architecture.md              # Master architecture & technical specification
 ├── PITCH.md                     # Two-minute elevator pitch
 │
 ├── api/
 │   ├── main.py                  # FastAPI app assembly + health + vessels + metocean
+│   ├── config.py                # Pydantic-settings (DB URL, CORS, signing key, env)
+│   ├── db.py                    # SQLAlchemy store (Postgres/SQLite) + audit tables
+│   ├── seed.py                  # Idempotent startup seeder from sample scenes
+│   ├── forensics.py             # Ledger/verify payload assembly (shared by routes + seed)
 │   └── routes/
-│       ├── incidents.py         # SAR scene catalog (/api/v1/incidents)
-│       ├── drift.py             # RK4 reverse backtracking (/api/v1/drift/backtrack)
-│       ├── attribution.py       # 5-factor Bayesian vessel scoring
-│       └── evidence.py          # Merkle ledger + verification sequence
+│       ├── incidents.py         # SAR scene catalog (/api/v1/incidents, DB-backed)
+│       ├── drift.py             # RK4 reverse backtracking (+ audit-trail persistence)
+│       ├── attribution.py       # 5-factor Bayesian vessel scoring (+ audit-trail persistence)
+│       └── evidence.py          # Merkle ledger + verification sequence (DB-backed)
 │
 ├── core/
 │   ├── sar/
@@ -136,16 +141,46 @@ Install those (as above) and ignore the heavy entries until you plug in real SAR
 
 ---
 
-## Optional: Docker
+## Optional: Docker (full production stack)
 
-Docker runs the backend + dashboard in containers. The web console is behind the `full` profile because an 8 GB machine runs the native console far better.
+The compose stack now runs a **real Postgres store** seeded on boot, the slim API image, and the Streamlit dashboard. The web console is behind the `full` profile because an 8 GB machine runs the native console far better.
 
 ```bash
-docker compose up -d                # backend on :8000 + dashboard on :8501
+docker compose up -d                # Postgres + API on :8000 + dashboard on :8501
 docker compose --profile full up -d # + web console on :3000
 ```
 
-> Native mode is the reference deployment. Docker is provided for demoing the backend on machines that have RAM to spare.
+The API persists incidents, vessels, the evidence ledger, and every drift/attribution
+computation as an audit trail. With no `DATABASE_URL` set it gracefully falls back to
+SQLite (`data/sagar_drishti.db`); set `DATABASE_URL` to Postgres for production.
+
+> Native mode is the reference deployment. Docker is provided for demoing the stack on machines that have RAM to spare.
+
+---
+
+## Deploying to the public internet
+
+**Backend + database** (Render / Railway), then **console** (Vercel). The console
+auto-detects a reachable backend and switches LIVE — otherwise it runs self-contained
+(SIMULATED).
+
+### Backend on Render
+1. New **Web Service** → connect the GitHub repo → directory root, build `pip install -r requirements-api.txt`, start `uvicorn api.main:app --host 0.0.0.0 --port 10000`.
+2. Add a **PostgreSQL** database (Render free tier) and set:
+   - `DATABASE_URL` = the Postgres URI
+   - `CORS_ORIGINS` = your Vercel URL
+   - `NODE_SIGNING_KEY` = a fresh hex key (32 bytes)
+3. Deploy. Seed data auto-loads on first boot (`/health` → `"database":"up"`).
+
+### Console on Vercel
+1. New project → same repo → **root directory: `frontend`**, framework **Next.js**.
+2. Add env var `NEXT_PUBLIC_API_URL` = `https://<your-render-api>/`.
+3. Deploy. The bootstrap pings `/health`; if CORS/reachability fails it degrades to SIMULATED rather than breaking the demo.
+
+### Secrets
+Postgres URI and signing keys live in the host platform's config (never the repo).
+The `.env.example` files document every knob; the compose file reads `POSTGRES_PASSWORD`
+and `NODE_SIGNING_KEY` from your shell/.env when provided.
 
 ---
 
@@ -181,7 +216,7 @@ docker compose --profile full up -d # + web console on :3000
 - **Live SAR ingestion**: replace `data/sample_scenes.py` with a Copernicus CDSE OData client; keep the scene JSON schema identical and the console consumes it unchanged.
 - **Deep learning segmenter**: drop a SegFormer/DeepLab checkpoint behind `core/sar/detection.py` (register it with `load_pretrained_model`) to replace the heuristic slicer.
 - **Live AIS**: swap the sample vessels for a decoded AIVDM stream (`core/ais/parser.py` already ingests CSV/JSON; the attribution route consumes per-vessel events).
-- **Scale-out**: the commented `postgres`/`redis`/`timescaledb`/`minio` services in `docker-compose.yml` are the intended multi-node path.
+- **Scale-out**: `docker-compose.yml` already wires Postgres (the store) in; the intended multi-node path adds Redis (live telemetry) and MinIO/TimescaleDB for dense SAR/AIS history after real ingestion replaces the sample scenes.
 
 ---
 

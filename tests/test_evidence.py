@@ -1,17 +1,13 @@
 """Unit tests for the tamper-evident evidence ledger and hash chain."""
 import copy
-import json
-
-import pytest
 
 from core.evidence.ledger import (
     TamperEvidentLedger,
-    MerkleBlock,
-    hash_obj,
     build_evidence_hashes,
     ed25519_sign_hex,
+    hash_obj,
 )
-from data.sample_scenes import MOCK_SAR_SCENES, MOCK_AIS_VESSELS, MOCK_METOCEAN
+from data.sample_scenes import MOCK_AIS_VESSELS, MOCK_METOCEAN, MOCK_SAR_SCENES
 
 
 def _build_ledger() -> TamperEvidentLedger:

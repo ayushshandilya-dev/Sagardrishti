@@ -1,31 +1,58 @@
-# Ground rules: `docker compose up` runs ONLY the backend + dashboard.
-# The web console is Docker-optional; run it natively with `npm run dev`
-# (see README) unless you explicitly want the "full" profile.
+# Sagar-Drishti stack
+#   docker compose up -d                   # API + Postgres + Streamlit dashboard
+#   docker compose --profile full up -d    # + web console on :3000
 #
-#   docker compose up -d               # backend API + Streamlit dashboard
-#   docker compose --profile full up -d  # + web console on :3000
+# The API runs against a real PostgreSQL store (seeded automatically on boot).
+# Override secrets:  docker compose up -e POSTGRES_PASSWORD=...   or a .env file.
 
 services:
-  # API Gateway
+  # Postgres store — the source of truth for incidents, vessels, evidence ledger,
+  # and computation audit trails.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sagar_drishti
+      POSTGRES_USER: sagar_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sagar_secure_pw}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sagar_user -d sagar_drishti"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # API Gateway (slim image — no GDAL/torch toolchain needed)
   api:
-    build: ./docker
+    build:
+      context: .
+      dockerfile: api/Dockerfile
     command: ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8000:8000"
     environment:
+      - DATABASE_URL=postgresql+psycopg://sagar_user:${POSTGRES_PASSWORD:-sagar_secure_pw}@postgres:5432/sagar_drishti
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - API_ENV=production
+      - NODE_SIGNING_KEY=${NODE_SIGNING_KEY:-0101010101010101010101010101010101010101010101010101010101010101}
       - PYTHONUNBUFFERED=1
-    volumes:
-      - ./:/app:rw
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # Streamlit Dashboard
   dashboard:
-    build: ./docker
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["streamlit", "run", "dashboard/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
     ports:
       - "8501:8501"
     environment:
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
       - PYTHONUNBUFFERED=1
+      - API_BASE_URL=http://api:8000
     depends_on:
       - api
 
@@ -40,42 +67,5 @@ services:
     depends_on:
       - api
 
-# Infrastructure services (commented for local demo)
-# postgres:
-#   image: postgis/postgis:16
-#   environment:
-#     POSTGRES_DB: sagar_drishti
-#     POSTGRES_USER: sagar_user
-#     POSTGRES_PASSWORD: changeme
-#   volumes:
-#     - pg_data:/var/lib/postgresql/data
-#   ports:
-#     - "5432:5432"
-#
-# redis:
-#   image: redis:7-alpine
-#   ports:
-#     - "6379:6379"
-#
-# minio:
-#   image: minio/minio:latest
-#   environment:
-#     MINIO_ROOT_USER: minioadmin
-#     MINIO_ROOT_PASSWORD: minioadmin
-#   command: minio/server/data --console-address localhost:9001
-#   ports:
-#     - "9000:9000"
-#     - "9001:9001"
-#
-# timescaledb:
-#   image: timescale/timescaledb:2-pg16
-#   environment:
-#     POSTGRES_DB: sagar_drishti
-#     POSTGRES_USER: sagar_user
-#     POSTGRES_PASSWORD: changeme
-#   volumes:
-#     - ts_data:/var/lib/postgresql/data
-
 volumes:
   pg_data:
-  ts_data:

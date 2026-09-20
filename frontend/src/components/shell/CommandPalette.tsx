@@ -185,14 +185,6 @@ export const CommandPalette: React.FC = () => {
       icon: Layers,
       action: () => setLayer("drift", !layers.drift),
     });
-    list.push({
-      id: "layer-pipelines",
-      category: "Layers",
-      title: `Toggle Subsea Pipelines [${layers.pipelines ? "ACTIVE" : "OFF"}]`,
-      subtitle: "Offshore oil & gas pipeline corridors",
-      icon: Layers,
-      action: () => setLayer("pipelines", !layers.pipelines),
-    });
 
     return list;
   }, [

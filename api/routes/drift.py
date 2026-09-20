@@ -1,10 +1,15 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
-from typing import List, Dict, Any
-from core.drift.rk4 import compute_drift_vector, rk4_backtrack
-import numpy as np
+import logging
 import math
 from datetime import datetime, timedelta
+from typing import Any
+
+import numpy as np
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+from core.drift.rk4 import rk4_backtrack
+
+logger = logging.getLogger("sagar.drift")
 
 router = APIRouter(prefix="/api/v1/drift", tags=["drift"])
 
@@ -16,7 +21,7 @@ class DriftRequest(BaseModel):
     step_seconds: int = 300
 
 @router.post("/backtrack")
-async def calculate_backtrack(req: DriftRequest) -> Dict[str, Any]:
+async def calculate_backtrack(req: DriftRequest) -> dict[str, Any]:
     """
     Calculate reverse Lagrangian drift trajectory using 4th-Order Runge-Kutta (RK4).
     Backtracks from satellite observation time to estimate discharge origin (x0, y0, t0).
@@ -39,9 +44,6 @@ async def calculate_backtrack(req: DriftRequest) -> Dict[str, Any]:
     # Generate multi-point trajectory for every 1-hour interval
     trajectory = []
     total_steps = int(req.max_hours)
-    
-    current_lat = req.latitude
-    current_lon = req.longitude
     
     for h in range(total_steps + 1):
         step_hours = float(h)
@@ -75,7 +77,7 @@ async def calculate_backtrack(req: DriftRequest) -> Dict[str, Any]:
     
     origin = trajectory[-1]
     
-    return {
+    result = {
         "status": "success",
         "provenance": {
             "driftModel": "4th-Order Runge-Kutta (RK4) Lagrangian Advection",
@@ -99,3 +101,20 @@ async def calculate_backtrack(req: DriftRequest) -> Dict[str, Any]:
         },
         "trajectory": trajectory
     }
+
+    # Persist an auditable trail of this computation.
+    try:
+        from api.db import DriftRunRow, db
+        with db.session_scope() as session:
+            session.add(DriftRunRow(
+                latitude=req.latitude,
+                longitude=req.longitude,
+                max_hours=req.max_hours,
+                request=req.model_dump(),
+                result=result,
+            ))
+    except Exception as exc:  # noqa: BLE001 - deliberate: audit persistence is best-effort
+        # Logged, never fatal: a live drift computation must not fail on persistence.
+        logger.warning("Drift audit-trail persistence failed: %s", exc)
+
+    return result

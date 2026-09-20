@@ -1,8 +1,13 @@
+import logging
+from typing import Any
+
 from fastapi import APIRouter
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+
 from core.correlation.attribution import compute_attribution_score
 from data.sample_scenes import MOCK_AIS_VESSELS
+
+logger = logging.getLogger("sagar.attribution")
 
 router = APIRouter(prefix="/api/v1/attribution", tags=["attribution"])
 
@@ -18,7 +23,7 @@ async def get_candidate_attributions(
     backtrack_lon: float = 69.2510,
     slick_orientation: float = 248.5,
     sar_timestamp: str = "2026-09-11T10:30:00Z"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Score and rank all candidate AIS vessels against the reconstructed discharge origin.
     Uses the 5-factor Bayesian attribution model (f1-f5) with kinematic anomaly detection.
@@ -117,11 +122,30 @@ async def get_candidate_attributions(
             if r["attributionRank"] == 1
             else "WATCH" if r["vesselType"] in ("OIL_TANKER", "CHEMICAL_TANKER") else "CLEAR"
         )
-    
-    return {
+
+    payload = {
         "status": "success",
         "totalEvaluated": len(results),
         "topSuspect": results[0]["vesselName"],
         "topAttributionScore": results[0]["attributionScore"],
         "candidates": results
     }
+
+    # Persist an auditable trail of this scoring computation.
+    try:
+        from api.db import AttributionRunRow, db
+        with db.session_scope() as session:
+            session.add(AttributionRunRow(
+                request={
+                    "backtrack_lat": backtrack_lat,
+                    "backtrack_lon": backtrack_lon,
+                    "slick_orientation": slick_orientation,
+                    "sar_timestamp": sar_timestamp,
+                },
+                result=payload,
+            ))
+    except Exception as exc:  # noqa: BLE001 - deliberate: audit persistence is best-effort
+        # Logged, never fatal: attribution must not fail on a persistence hiccup.
+        logger.warning("Attribution audit-trail persistence failed: %s", exc)
+
+    return payload

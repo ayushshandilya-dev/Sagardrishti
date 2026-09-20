@@ -223,7 +223,6 @@ export const TopBar: React.FC = () => {
             </button>
           )}
         </div>
-        </div>
       </div>
     </header>
   );

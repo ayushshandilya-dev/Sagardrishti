@@ -77,9 +77,6 @@ interface CommandStore {
   isDemoPaused: boolean;
   demoStep: number;
   isSpeechEnabled: boolean;
-  isDemoRunning: boolean;
-  isDemoPaused: boolean;
-  demoStep: number;
   startDemo: () => void;
   resetDemo: () => void;
   togglePauseDemo: () => void;
@@ -167,9 +164,6 @@ export const useCommandStore = create<CommandStore>((set, get) => ({
   isDemoPaused: false,
   demoStep: 0,
   isSpeechEnabled: false,
-  isDemoRunning: false,
-  isDemoPaused: false,
-  demoStep: 0,
   detectionMs: null,
   startDemo: () => set({ isDemoRunning: true, isDemoPaused: false, demoStep: 1 }),
   resetDemo: () =>
@@ -177,7 +171,6 @@ export const useCommandStore = create<CommandStore>((set, get) => ({
       isDemoRunning: false,
       isDemoPaused: false,
       demoStep: 0,
-      isDemoPaused: false,
       detectionMs: null,
       currentDriftHour: 0,
       isDriftPlaying: false,

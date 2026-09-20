@@ -1,0 +1,11 @@
+# Slim dependency set for the Sagar-Drishti API image.
+# The API routes only import numpy-backed science modules (SAR/attribution/drift
+# science on CPU), so it does NOT need GDAL, torch, rasterio, or pandas.
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+sqlalchemy>=2.0.0
+psycopg[binary]>=3.1.0
+pydantic>=2.5.0
+pydantic-settings>=2.2.0
+numpy>=1.26.0
+python-dotenv>=1.0.0
