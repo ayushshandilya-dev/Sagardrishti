@@ -1,7 +1,21 @@
-import { Incident, DriftResult, CandidateVessel, EvidenceLedgerResponse, EvidenceCheck } from "./types";
-import { MOCK_INCIDENTS, MOCK_DRIFT_RESULT, MOCK_CANDIDATE_VESSELS, MOCK_EVIDENCE_LEDGER, MOCK_EVIDENCE_CHECKS } from "./mockData";
+import {
+  Incident,
+  DriftResult,
+  CandidateVessel,
+  EvidenceLedgerResponse,
+  EvidenceCheck,
+  EvidenceManifestResponse,
+} from "./types";
+import {
+  MOCK_INCIDENTS,
+  MOCK_DRIFT_RESULT,
+  MOCK_CANDIDATE_VESSELS,
+  MOCK_EVIDENCE_LEDGER,
+  MOCK_EVIDENCE_CHECKS,
+  MOCK_EVIDENCE_MANIFEST,
+} from "./mockData";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
 function headers(extra: Record<string, string> = {}): Record<string, string> {
@@ -31,13 +45,17 @@ export async function getIncidents(): Promise<Incident[]> {
   }
 }
 
-export async function getDriftBacktrack(latitude: number, longitude: number, sarTimestamp: string): Promise<DriftResult> {
+export async function getDriftBacktrack(
+  latitude: number,
+  longitude: number,
+  sarTimestamp: string
+): Promise<DriftResult> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/drift/backtrack`, {
       method: "POST",
       headers: headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ latitude, longitude, sar_timestamp: sarTimestamp }),
-      signal: AbortSignal.timeout(2500)
+      signal: AbortSignal.timeout(2500),
     });
     if (!res.ok) throw new Error("Backend error");
     return await res.json();
@@ -57,23 +75,26 @@ export async function getAttributionCandidates(
       backtrack_lat: backtrackLat.toString(),
       backtrack_lon: backtrackLon.toString(),
       slick_orientation: slickOrientation.toString(),
-      sar_timestamp: sarTimestamp
+      sar_timestamp: sarTimestamp,
     });
-    const res = await fetch(`${API_BASE_URL}/api/v1/attribution/candidates?${query}`, { headers: headers(), signal: AbortSignal.timeout(2500) });
+    const res = await fetch(`${API_BASE_URL}/api/v1/attribution/candidates?${query}`, {
+      signal: AbortSignal.timeout(2500),
+    });
+const res = await fetch(`${API_BASE_URL}/api/v1/attribution/candidates?${query}`, { headers: headers(), signal: AbortSignal.timeout(2500) });
     if (!res.ok) throw new Error("Backend error");
     return await res.json();
   } catch {
     return {
       candidates: MOCK_CANDIDATE_VESSELS,
       topSuspect: MOCK_CANDIDATE_VESSELS[0].vesselName,
-      topAttributionScore: MOCK_CANDIDATE_VESSELS[0].attributionScore
+      topAttributionScore: MOCK_CANDIDATE_VESSELS[0].attributionScore,
     };
   }
 }
 
 export async function getEvidenceLedger(): Promise<EvidenceLedgerResponse> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/evidence/ledger`, { headers: headers(), signal: AbortSignal.timeout(2000) });
+const res = await fetch(`${API_BASE_URL}/api/v1/evidence/ledger`, { headers: headers(), cache: "no-store", signal: AbortSignal.timeout(2000) });
     if (!res.ok) throw new Error("Backend error");
     return await res.json();
   } catch {
@@ -81,11 +102,28 @@ export async function getEvidenceLedger(): Promise<EvidenceLedgerResponse> {
   }
 }
 
-export async function verifyEvidenceChain(): Promise<{ allVerified: boolean; checks: EvidenceCheck[]; verificationTimestamp: string }> {
+export async function getEvidenceManifest(): Promise<EvidenceManifestResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/evidence/manifest`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) throw new Error("Backend error");
+    return await res.json();
+  } catch {
+    return MOCK_EVIDENCE_MANIFEST;
+  }
+}
+
+export async function verifyEvidenceChain(): Promise<{
+  allVerified: boolean;
+  checks: EvidenceCheck[];
+  verificationTimestamp: string;
+}> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/evidence/verify`, {
       method: "POST",
-      headers: headers({ "Content-Type": "application/json" }),
+headers: headers({ "Content-Type": "application/json" }),
       signal: AbortSignal.timeout(2500)
     });
     if (!res.ok) throw new Error("Backend error");
@@ -94,7 +132,7 @@ export async function verifyEvidenceChain(): Promise<{ allVerified: boolean; che
     return {
       allVerified: true,
       checks: MOCK_EVIDENCE_CHECKS,
-      verificationTimestamp: new Date().toISOString()
+      verificationTimestamp: new Date().toISOString(),
     };
   }
 }

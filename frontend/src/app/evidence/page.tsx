@@ -1,18 +1,36 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useState } from "react";
 import { useCommandStore } from "@/lib/store";
+import { getEvidenceManifest } from "@/lib/api";
 import { MOCK_EVIDENCE_LEDGER } from "@/lib/mockData";
 import { EvidenceChain } from "@/components/evidence/EvidenceChain";
 import { VerificationPanel } from "@/components/evidence/VerificationPanel";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { ShieldCheck, Fingerprint, Network, Link2 } from "lucide-react";
+import { ShieldCheck, Fingerprint, Network, Link2, Download, PackageCheck } from "lucide-react";
 
 export default function EvidenceLedgerPage() {
   const { hasVerified, evidenceLedger } = useCommandStore();
   const ledger = evidenceLedger ?? MOCK_EVIDENCE_LEDGER;
+  const [isExporting, setIsExporting] = useState(false);
+
+  const exportEvidencePackage = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const manifest = await getEvidenceManifest();
+      const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${manifest.packageId}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
+    }
+  }, []);
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 pb-2">
@@ -38,9 +56,16 @@ export default function EvidenceLedgerPage() {
               dot={false}
               icon={<Fingerprint className="h-3 w-3" />}
             />
+            <StatusBadge
+              label={isExporting ? "EXPORTING…" : "EXPORT PACKAGE"}
+              tone="info"
+              dot={false}
+              icon={isExporting ? <PackageCheck className="h-3 w-3 animate-pulse" /> : <Download className="h-3 w-3" />}
+            />
           </>
         }
       />
+
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_380px] gap-3 overflow-hidden">
         {/* vertical forensic chain */}
