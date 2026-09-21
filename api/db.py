@@ -146,6 +146,44 @@ class Database:
 db = Database()
 
 
+def run_migrations() -> None:
+    """Apply Alembic migrations (upgrade head) against the configured store."""
+    import logging
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    logger = logging.getLogger("sagar.db")
+    root = Path(__file__).resolve().parent.parent
+
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "migrations"))
+    cfg.set_main_option("sqlalchemy.url", get_settings().database_url)
+
+    # Fresh store -> run the chain. Pre-Alembic store (tables but no version
+    # table) -> stamp head so we do not collide with the existing schema.
+    from sqlalchemy import inspect
+
+    inspector = inspect(db.engine)
+    if not inspector.has_table("alembic_version"):
+        if any(inspector.has_table(t) for t in ("incidents", "vessels", "ledger_blocks")):
+            command.stamp(cfg, "head")
+            logger.info("Stamped pre-Alembic store at head")
+        else:
+            command.upgrade(cfg, "head")
+            logger.info("Schema migrated to head (%s)", get_settings().database_url)
+    else:
+        command.upgrade(cfg, "head")
+        logger.info("Schema at head (%s)", get_settings().database_url)
+
+
 def init_db() -> None:
-    """Create tables if they do not exist (no-op when already present)."""
+    """Bring the schema to head: Alembic migrations, or create_all (dev only)."""
+    settings = get_settings()
+    if settings.run_migrations:
+        run_migrations()
+        return
+    if settings.api_env == "production":
+        raise RuntimeError("API_ENV=production requires run_migrations=true (Alembic)")
     db.create_all()

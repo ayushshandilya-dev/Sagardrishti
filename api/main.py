@@ -1,12 +1,13 @@
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import get_settings
 from api.db import db, init_db
 from api.routes import attribution, drift, evidence, incidents
+from api.security import RateLimitMiddleware, require_api_key
 from api.seed import seed_all
 
 settings = get_settings()
@@ -14,7 +15,8 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Bring up persistence, seed the store, then serve traffic."""
+    """Validate configuration, bring up persistence, seed, then serve traffic."""
+    settings.validate_production()
     init_db()
     try:
         seed_all()
@@ -44,11 +46,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register route controllers
-app.include_router(incidents.router)
-app.include_router(drift.router)
-app.include_router(attribution.router)
-app.include_router(evidence.router)
+app.add_middleware(RateLimitMiddleware)
+
+# Register route controllers. All API routes pass through the optional X-API-Key gate.
+app.include_router(incidents.router, dependencies=[Depends(require_api_key)])
+app.include_router(drift.router, dependencies=[Depends(require_api_key)])
+app.include_router(attribution.router, dependencies=[Depends(require_api_key)])
+app.include_router(evidence.router, dependencies=[Depends(require_api_key)])
 
 
 @app.get("/", tags=["system"])

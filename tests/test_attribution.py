@@ -1,10 +1,13 @@
 """Unit tests for the multi-factor Bayesian attribution model."""
-import pytest
 import numpy as np
+
 from core.correlation.attribution import (
-    backtrack_proximity_score, trajectory_collinearity_score,
-    vessel_profile_prior, kinetic_anomaly_score, temporal_plausibility_score,
-    compute_attribution_score
+    backtrack_proximity_score,
+    compute_attribution_score,
+    kinetic_anomaly_score,
+    temporal_plausibility_score,
+    trajectory_collinearity_score,
+    vessel_profile_prior,
 )
 
 
@@ -40,7 +43,7 @@ class TestBacktrackProximity:
             vlon = np.random.uniform(65, 75)
             blat = np.random.uniform(20, 25)
             blon = np.random.uniform(65, 75)
-            score = backtrack_proximity_score(vlat, vlon, 0, blon, blon, 500.0)
+            score = backtrack_proximity_score(vlat, vlon, 0, blat, blon, 500.0)
             assert 0.0 <= score <= 1.0
 
 
@@ -256,7 +259,7 @@ class TestComputeAttributionScore:
             "discharge_time": "2026-09-11T08:30:00Z"
         }
 
-        result = compute_attribution_score(
+        compute_attribution_score(
             mmsi_data, backtrack_coords, "OIL_TANKER", "2026-09-11T10:30:00Z"
         )
 

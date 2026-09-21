@@ -2,6 +2,11 @@ import { Incident, DriftResult, CandidateVessel, EvidenceLedgerResponse, Evidenc
 import { MOCK_INCIDENTS, MOCK_DRIFT_RESULT, MOCK_CANDIDATE_VESSELS, MOCK_EVIDENCE_LEDGER, MOCK_EVIDENCE_CHECKS } from "./mockData";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
+
+function headers(extra: Record<string, string> = {}): Record<string, string> {
+  return API_KEY ? { ...extra, "X-API-Key": API_KEY } : extra;
+}
 
 /* Reachability probe — used by the bootstrap to switch LIVE / SIMULATED */
 export async function pingBackend(): Promise<boolean> {
@@ -18,7 +23,7 @@ export async function pingBackend(): Promise<boolean> {
 
 export async function getIncidents(): Promise<Incident[]> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/incidents`, { cache: "no-store", signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${API_BASE_URL}/api/v1/incidents`, { cache: "no-store", headers: headers(), signal: AbortSignal.timeout(2000) });
     if (!res.ok) throw new Error("Backend error");
     return await res.json();
   } catch {
@@ -30,7 +35,7 @@ export async function getDriftBacktrack(latitude: number, longitude: number, sar
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/drift/backtrack`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ latitude, longitude, sar_timestamp: sarTimestamp }),
       signal: AbortSignal.timeout(2500)
     });
@@ -54,7 +59,7 @@ export async function getAttributionCandidates(
       slick_orientation: slickOrientation.toString(),
       sar_timestamp: sarTimestamp
     });
-    const res = await fetch(`${API_BASE_URL}/api/v1/attribution/candidates?${query}`, { signal: AbortSignal.timeout(2500) });
+    const res = await fetch(`${API_BASE_URL}/api/v1/attribution/candidates?${query}`, { headers: headers(), signal: AbortSignal.timeout(2500) });
     if (!res.ok) throw new Error("Backend error");
     return await res.json();
   } catch {
@@ -68,7 +73,7 @@ export async function getAttributionCandidates(
 
 export async function getEvidenceLedger(): Promise<EvidenceLedgerResponse> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/evidence/ledger`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${API_BASE_URL}/api/v1/evidence/ledger`, { headers: headers(), signal: AbortSignal.timeout(2000) });
     if (!res.ok) throw new Error("Backend error");
     return await res.json();
   } catch {
@@ -80,7 +85,7 @@ export async function verifyEvidenceChain(): Promise<{ allVerified: boolean; che
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/evidence/verify`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers({ "Content-Type": "application/json" }),
       signal: AbortSignal.timeout(2500)
     });
     if (!res.ok) throw new Error("Backend error");

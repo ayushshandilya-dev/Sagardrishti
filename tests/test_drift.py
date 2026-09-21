@@ -1,11 +1,9 @@
 """Unit tests for the 4th-order Runge-Kutta reverse drift backtracking."""
 import numpy as np
-import pytest
 
 from core.drift.rk4 import (
-    rk4_backtrack,
     compute_drift_vector,
-    METERS_PER_DEGREE_LAT,
+    rk4_backtrack,
 )
 
 

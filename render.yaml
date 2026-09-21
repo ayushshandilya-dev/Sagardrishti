@@ -8,6 +8,8 @@
 #   DATABASE_URL      = your Neon connection string  (postgresql://...?sslmode=require)
 #   CORS_ORIGINS      = your Vercel console URL       (https://<project>.vercel.app)
 #   NODE_SIGNING_KEY  = 64 hex chars (generate: openssl rand -hex 32)
+#   API_KEY           = optional; if set, clients must send X-API-Key (mirror it
+#                       into the console as NEXT_PUBLIC_API_KEY)
 
 services:
   - type: web
@@ -24,6 +26,8 @@ services:
       - key: CORS_ORIGINS
         sync: false
       - key: NODE_SIGNING_KEY
+        sync: false
+      - key: API_KEY
         sync: false
       - key: API_ENV
         value: production

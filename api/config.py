@@ -37,6 +37,22 @@ class Settings(BaseSettings):
     node_id: str = "icg-sagar-drishti-node-01"
     node_signing_key: str = "01" * 32  # single ICG authority key for demonstrable custody
 
+    # ── Access control ──────────────────────────────────────────
+    # If set, every /api/v1/* request must carry `X-API-Key: <api_key>`.
+    # Optional by default so the public demo console needs no key; operators
+    # set it to gate scripts/ops access. Rate limiting is always active.
+    api_key: str | None = None
+
+    # ── Rate limiting (in-process token buckets) ────────────────
+    # Generous by default; tighten before public launch.
+    rate_limit_requests_per_minute: int = 300
+    rate_limit_compute_per_minute: int = 30
+
+    # ── Database migrations ─────────────────────────────────────
+    # Alembic `upgrade head` runs on startup; create_all is the fallback ONLY
+    # in non-production environments.
+    run_migrations: bool = True
+
     # ── Drift / attribution sampling ────────────────────────────
     default_max_hours: float = 12.0
     default_step_seconds: int = 300
@@ -47,6 +63,28 @@ class Settings(BaseSettings):
         if raw == "*":
             return ["*"]
         return [o.strip() for o in raw.split(",") if o.strip()]
+
+    def validate_production(self) -> None:
+        """Fail fast on unsafe configuration when API_ENV=production."""
+        if self.api_env != "production":
+            return
+
+        problems: list[str] = []
+        if not self.database_url.startswith("postgresql"):
+            problems.append("API_ENV=production requires DATABASE_URL to point at Postgres (sqlite is not allowed)")
+        if self.cors_origins.strip() == "*":
+            problems.append("API_ENV=production requires explicit CORS_ORIGINS (wildcard not allowed)")
+        if self.node_signing_key == "01" * 32:
+            problems.append("API_ENV=production requires a real NODE_SIGNING_KEY (the demo default is not allowed)")
+        if not self.api_key:
+            problems.append("API_ENV=production requires an API_KEY for the X-API-Key gate")
+        if not self.run_migrations:
+            problems.append("API_ENV=production requires run_migrations so the schema is migrated, not just created")
+
+        if problems:
+            raise RuntimeError(
+                "Unsafe production configuration:\n  - " + "\n  - ".join(problems)
+            )
 
 
 @lru_cache

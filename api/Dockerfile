@@ -14,6 +14,8 @@ WORKDIR /app
 COPY requirements-api.txt .
 RUN pip install --no-cache-dir -r requirements-api.txt
 
+COPY alembic.ini .
+COPY migrations ./migrations
 COPY api ./api
 COPY core ./core
 COPY data ./data
