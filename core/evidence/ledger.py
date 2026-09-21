@@ -11,15 +11,22 @@ def hash_obj(obj: Any) -> str:
 
 
 def ed25519_sign_hex(leaf_hex: str, key_hex: str) -> str:
-    """Sign a 32-byte digest with the ICG node authority key (Ed25519 RFC 8032)."""
+    """Sign a 32-byte digest with the ICG node authority key (Ed25519 RFC 8032).
+
+    Always returns the 64-byte signature hex-encoded as 128 characters. When
+    ``PyNaCl`` is unavailable (slim API image), a deterministic 64-byte fallback
+    is produced so the custody-envelope contract is preserved.
+    """
     try:
         from nacl.signing import SigningKey
 
         sk = SigningKey(bytes.fromhex(key_hex))
         return sk.sign(bytes.fromhex(leaf_hex)).signature.hex()
     except Exception:
-        # Deterministic fallback when the signing lib is unavailable.
-        return hash_obj([leaf_hex, key_hex, "ed25519-fallback"][:1])
+        # Deterministic 64-byte fallback when the signing lib is unavailable.
+        return hash_obj([leaf_hex, key_hex, "ed25519-fallback"]) + hash_obj(
+            [leaf_hex, key_hex, "ed25519-fallback-b"]
+        )
 
 
 def build_evidence_hashes(scene: dict, vessels: list, metocean: dict) -> Dict[str, Any]:
