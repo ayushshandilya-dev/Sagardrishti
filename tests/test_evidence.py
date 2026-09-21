@@ -88,3 +88,39 @@ class TestSignature:
         }
         assert "merkle_root" in payload
         assert len(payload["merkle_root"]) == 64
+
+    def test_evidence_manifest_contract(self):
+        from api.forensics import build_evidence_manifest
+
+        manifest = build_evidence_manifest()
+        assert manifest["manifestVersion"] == "1.0"
+        assert manifest["dataMode"] == "sample"
+        assert manifest["hashAlgorithm"] == "SHA-256"
+        assert manifest["signatureAlgorithm"] == "Ed25519"
+        assert len(manifest["merkleRoot"]) == 64
+        assert manifest["artifactCount"] == len(manifest["artifacts"])
+        assert {a["type"] for a in manifest["artifacts"]} == {
+            "SAR_CAPTURE",
+            "AIS_HISTORY",
+            "METOCEAN_SNAPSHOT",
+            "ATTRIBUTION_MATRIX",
+        }
+        for artifact in manifest["artifacts"]:
+            assert artifact["artifactId"].startswith(manifest["eventId"])
+            assert len(artifact["sha256"]) == 64
+
+    def test_evidence_manifest_is_deterministic(self):
+        """Stable-hash test: content-level fields are byte-identical across runs.
+
+        The envelope's `generatedAtUtc` is wall-clock by design, so only the
+        content-deterministic fields (merkle root, per-artifact hashes, and the
+        signature over the root) are required to be stable.
+        """
+        from api.forensics import build_evidence_manifest
+
+        first = build_evidence_manifest()
+        second = build_evidence_manifest()
+        assert first["merkleRoot"] == second["merkleRoot"]
+        assert first["artifactCount"] == second["artifactCount"]
+        assert first["artifacts"] == second["artifacts"]
+        assert first["signatureEd25519"] == second["signatureEd25519"]

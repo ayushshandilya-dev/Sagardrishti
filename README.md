@@ -21,6 +21,26 @@ The command console (`frontend/`) is a React + MapLibre GL command center that r
 
 ---
 
+## Current Readiness: Demo vs. Production
+
+This repository is currently a **tested demonstration platform**, not a production enforcement system connected to live national data feeds.
+
+What is real today:
+
+- The backend API, frontend console, evidence routes, drift/attribution endpoints, and browser smoke tests run as code in this repository.
+- The SAR, drift, AIS, and evidence flows use realistic schemas and scientifically grounded parameters.
+- The console can run with a reachable API (`DATA LIVE`) or fall back to cached sample data (`DATA SIMULATED`).
+
+What is still demo/sample data today:
+
+- Sentinel-1 scenes, AIS vessel tracks, MetOcean snapshots, attribution candidates, and evidence leaves are seeded from bundled sample data unless replaced by external providers.
+- Court-readiness claims are architectural targets demonstrated by code paths and tests; real admissibility requires live source provenance, operator procedures, key custody, and jurisdiction-specific legal review.
+- Hashes/signatures prove integrity of the currently stored payloads; they do not certify that the payloads came from official external feeds unless those feeds are integrated and preserved.
+
+Production readiness requires replacing sample sources with real Copernicus/AIS/MetOcean ingestion, enforcing authentication/roles, managing signing keys in a secure KMS/HSM-backed process, deploying behind HTTPS, and operating monitoring/backups/audit procedures.
+
+---
+
 ## Repository Structure
 
 ```

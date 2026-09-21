@@ -4,6 +4,7 @@ import {
   DriftResult,
   EvidenceLedgerResponse,
   EvidenceCheck,
+  EvidenceManifestResponse,
   OperationalAlert,
   SatPass,
 } from "./types";
@@ -744,6 +745,82 @@ export const MOCK_EVIDENCE_LEDGER: EvidenceLedgerResponse = {
         "00004a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d80",
       block_hash: "0000e78f0b12a9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e",
       nonce: 6291456,
+    },
+  ],
+};
+
+export const MOCK_EVIDENCE_MANIFEST: EvidenceManifestResponse = {
+  status: "success",
+  manifestVersion: "1.0",
+  packageId: "SD-2026-00421:evidence-package",
+  eventId: "SD-2026-00421",
+  generatedAtUtc: "2026-09-11T10:51:02Z",
+  generatedBy: "icg-sagar-drishti-node-01",
+  dataMode: "sample",
+  hashAlgorithm: "SHA-256",
+  signatureAlgorithm: "Ed25519",
+  merkleRoot: "e78f0b12a9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0",
+  signatureEd25519:
+    "4f8a1c9e2d3b4a5c6d7e8f90123456789abcdef0123456789abcdef0123456789a4b5c6d7e8f90123456789abcdef",
+  artifactCount: 4,
+  artifacts: [
+    {
+      artifactId: "SD-2026-00421:sar-scene",
+      type: "SAR_CAPTURE",
+      source: "SENTINEL-1A",
+      timestampUtc: "2026-09-11T10:30:20Z",
+      sha256:
+        "3a7b8e519c2f6d0a4b8e7c1f9d2a5b6c7e8f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c",
+      classification: "MINERAL_OIL",
+      confidence: 0.942,
+      metadata: {
+        sensor: "C-Band SAR (IW Mode)",
+        productType: "GRD-IW",
+        polarization: ["VV", "VH"],
+        relativeOrbit: 118,
+        resolutionMeters: 10,
+      },
+    },
+    {
+      artifactId: "SD-2026-00421:ais-track",
+      type: "AIS_HISTORY",
+      source: "SAMPLE_AIS_PROVIDER",
+      timestampUtc: "2026-09-11T10:30:20Z",
+      sha256:
+        "f4d19c8e2b5a6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e",
+      classification: "VESSEL_TELEMETRY",
+      confidence: 1.0,
+      metadata: { vesselCount: 25 },
+    },
+    {
+      artifactId: "SD-2026-00421:metocean",
+      type: "METOCEAN_SNAPSHOT",
+      source: "SAMPLE_METOCEAN_PROVIDER",
+      timestampUtc: "2026-09-11T10:30:20Z",
+      sha256:
+        "8e50b2c1d3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1",
+      classification: "WIND_CURRENT_GRID",
+      confidence: 1.0,
+      metadata: { providerMode: "sample" },
+    },
+    {
+      artifactId: "SD-2026-00421:attribution",
+      type: "ATTRIBUTION_MATRIX",
+      source: "icg-sagar-drishti-node-01",
+      timestampUtc: "2026-09-11T10:51:02Z",
+      sha256:
+        "c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1",
+      classification: "MODEL_OUTPUT",
+      confidence: 0.935,
+      metadata: {
+        features: {
+          backtrackProximityScore: 0.962,
+          trajectoryCollinearityScore: 0.918,
+          vesselPriorScore: 1.0,
+          kineticAnomalyScore: 0.885,
+          temporalPlausibilityScore: 1.0,
+        },
+      },
     },
   ],
 };

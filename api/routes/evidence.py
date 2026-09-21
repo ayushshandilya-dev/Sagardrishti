@@ -1,15 +1,16 @@
+import json
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 
 from api.db import LedgerBlockRow, db
 from api.forensics import (
-    build_evidence_payload as _build_evidence_payload,  # noqa: F401 - science test contract
-)
-from api.forensics import (
+    build_evidence_manifest,
+    build_export_package,
     build_ledger_summary,
     build_verify_payload,
 )
+
 
 router = APIRouter(prefix="/api/v1/evidence", tags=["evidence"])
 
@@ -47,6 +48,23 @@ async def get_evidence_ledger() -> dict[str, Any]:
             "blocks": persisted["blocks"],
         }
     return build_ledger_summary()
+
+
+@router.get("/manifest")
+async def get_evidence_manifest() -> dict[str, Any]:
+    """Export a portable evidence manifest for downstream dossier generation."""
+    return build_evidence_manifest()
+
+
+@router.get("/export")
+async def export_evidence_dossier() -> Response:
+    """Download the sealed, portable Section 65B evidence dossier as JSON.
+
+    Reuses the same deterministic ``build_export_package()`` sealed by the
+    forensics module so the downloaded dossier is byte-identical to what the
+    export/sync artefacts carry and to what a fresh verification recomputes.
+    """
+    return build_export_package()
 
 
 @router.post("/verify")

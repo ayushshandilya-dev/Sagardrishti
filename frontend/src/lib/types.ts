@@ -191,6 +191,33 @@ export interface EvidenceLedgerResponse {
   blocks: MerkleBlock[];
 }
 
+export interface EvidenceManifestArtifact {
+  artifactId: string;
+  type: string;
+  source: string;
+  timestampUtc: string;
+  sha256: string;
+  classification: string;
+  confidence: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface EvidenceManifestResponse {
+  status: string;
+  manifestVersion: string;
+  packageId: string;
+  eventId: string;
+  generatedAtUtc: string;
+  generatedBy: string;
+  dataMode: "live" | "sample";
+  hashAlgorithm: string;
+  signatureAlgorithm: string;
+  merkleRoot: string;
+  signatureEd25519: string;
+  artifactCount: number;
+  artifacts: EvidenceManifestArtifact[];
+}
+
 export type AlertSeverity = "CRITICAL" | "SUSPICIOUS" | "VERIFIED";
 
 export interface OperationalAlert {
