@@ -6,6 +6,8 @@ consumed both by ``routes/evidence.py`` and ``api/seed.py``.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -228,7 +230,7 @@ def build_export_package() -> dict[str, Any]:
     # by design, exactly as in the manifest contract).
     deterministic = {
         "tiers": verify["checks"],
-        "ledger": {k: v for k, v in ledger.items() if k != "merkleRoot" or True},
+        "ledger": ledger,
         "manifest": {
             m: manifest[m]
             for m in (

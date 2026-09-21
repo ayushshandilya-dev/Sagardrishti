@@ -8,6 +8,7 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import numpy as np
 import json
+import hashlib
 
 # Page config
 st.set_page_config(
@@ -308,8 +309,7 @@ elif page == "Evidence Dossier":
     """)
     
     if st.button("Generate Evidence Dossier"):
-        from core.evidence.ledger import TamperEvidentLedger, MerkleBlock
-        from core.evidence.dossier import EvidenceDossierGenerator
+        from core.evidence.ledger import TamperEvidentLedger, MerkleBlock, EvidenceDossierGenerator
         
         # Initialize ledger
         ledger = TamperEvidentLedger(processing_node_id="sagar-drishti-demo-node")

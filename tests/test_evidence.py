@@ -77,8 +77,9 @@ class TestSignature:
         assert a == b
 
     def test_api_ledger_contract_fields(self):
-        from api.routes.evidence import _build_evidence_payload
-        payload = _build_evidence_payload()
+        from api.forensics import build_evidence_payload
+
+        payload = build_evidence_payload()
         assert set(payload["attribution_matrix"].keys()) == {
             "backtrackProximityScore",
             "trajectoryCollinearityScore",

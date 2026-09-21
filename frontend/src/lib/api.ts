@@ -78,9 +78,9 @@ export async function getAttributionCandidates(
       sar_timestamp: sarTimestamp,
     });
     const res = await fetch(`${API_BASE_URL}/api/v1/attribution/candidates?${query}`, {
+      headers: headers(),
       signal: AbortSignal.timeout(2500),
     });
-const res = await fetch(`${API_BASE_URL}/api/v1/attribution/candidates?${query}`, { headers: headers(), signal: AbortSignal.timeout(2500) });
     if (!res.ok) throw new Error("Backend error");
     return await res.json();
   } catch {
@@ -94,7 +94,7 @@ const res = await fetch(`${API_BASE_URL}/api/v1/attribution/candidates?${query}`
 
 export async function getEvidenceLedger(): Promise<EvidenceLedgerResponse> {
   try {
-const res = await fetch(`${API_BASE_URL}/api/v1/evidence/ledger`, { headers: headers(), cache: "no-store", signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${API_BASE_URL}/api/v1/evidence/ledger`, { headers: headers(), cache: "no-store", signal: AbortSignal.timeout(2000) });
     if (!res.ok) throw new Error("Backend error");
     return await res.json();
   } catch {
@@ -123,7 +123,7 @@ export async function verifyEvidenceChain(): Promise<{
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/evidence/verify`, {
       method: "POST",
-headers: headers({ "Content-Type": "application/json" }),
+      headers: headers({ "Content-Type": "application/json" }),
       signal: AbortSignal.timeout(2500)
     });
     if (!res.ok) throw new Error("Backend error");

@@ -1,4 +1,3 @@
-import json
 from typing import Any
 
 from fastapi import APIRouter, Response
@@ -10,7 +9,6 @@ from api.forensics import (
     build_ledger_summary,
     build_verify_payload,
 )
-
 
 router = APIRouter(prefix="/api/v1/evidence", tags=["evidence"])
 
