@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCommandStore } from "@/lib/store";
@@ -18,7 +19,15 @@ import {
   Maximize2,
   Box,
   Eye,
+  Sparkles,
 } from "lucide-react";
+import {
+  generateTacticalHoloGridGeoJson,
+  generateNeonCoastlineGeoJson,
+  generateLaserAttributionGeoJson,
+  createCrimsonOriginBeaconElement,
+} from "./engine/holoTheatre";
+import { HoloVesselCard } from "./HoloVesselCard";
 import {
   createOilSheenLayer,
   shipSilhouette,
@@ -184,6 +193,9 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
   const [contaminationMode, setContaminationMode] = useState<ContaminationMode>("volume");
   const [activeHud, setActiveHud] = useState<"incident" | "satellite" | "vessel" | "port" | null>("incident");
   const [selectedPortNode, setSelectedPortNode] = useState<InfrastructureNode | null>(null);
+  const [isHolo3D, setIsHolo3D] = useState(false);
+  const originBeaconRef = useRef<maplibregl.Marker | null>(null);
+  const router = useRouter();
 
   const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 1200, h: 800 });
   const [readout, setReadout] = useState<{ lat: number; lng: number; z: number }>({
@@ -784,6 +796,170 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
       });
     }
 
+    /* ═══════════════════════════════════════════════════════════
+       3D HOLOGRAPHIC MARITIME THEATRE (IMAGE 2 RECONSTRUCTION)
+       ═══════════════════════════════════════════════════════════ */
+    // 1. Dense Tactical Ocean Holographic Grid
+    map.addSource("holo-grid", {
+      type: "geojson",
+      data: generateTacticalHoloGridGeoJson(),
+    });
+
+    map.addLayer({
+      id: "holo-grid-glow",
+      type: "line",
+      source: "holo-grid",
+      paint: {
+        "line-color": [
+          "case",
+          ["==", ["get", "type"], "major"],
+          "#00F0FF",
+          "#06B6D4",
+        ],
+        "line-width": [
+          "case",
+          ["==", ["get", "type"], "major"],
+          2.0,
+          1.0,
+        ],
+        "line-blur": 2,
+        "line-opacity": [
+          "case",
+          ["==", ["get", "type"], "major"],
+          0.38,
+          0.22,
+        ],
+      },
+    });
+
+    map.addLayer({
+      id: "holo-grid-core",
+      type: "line",
+      source: "holo-grid",
+      paint: {
+        "line-color": [
+          "case",
+          ["==", ["get", "type"], "major"],
+          "#38BDF8",
+          "#22D3EE",
+        ],
+        "line-width": [
+          "case",
+          ["==", ["get", "type"], "major"],
+          0.9,
+          0.5,
+        ],
+        "line-opacity": [
+          "case",
+          ["==", ["get", "type"], "major"],
+          0.65,
+          0.4,
+        ],
+      },
+    });
+
+    // 2. Electric Neon Coastline Contours
+    map.addSource("neon-coastlines", {
+      type: "geojson",
+      data: generateNeonCoastlineGeoJson(),
+    });
+
+    map.addLayer({
+      id: "neon-coastline-glow",
+      type: "line",
+      source: "neon-coastlines",
+      paint: {
+        "line-color": "#00F0FF",
+        "line-width": 8,
+        "line-blur": 5,
+        "line-opacity": 0.55,
+      },
+    });
+
+    map.addLayer({
+      id: "neon-coastline-mid",
+      type: "line",
+      source: "neon-coastlines",
+      paint: {
+        "line-color": "#38BDF8",
+        "line-width": 2.8,
+        "line-blur": 1.2,
+        "line-opacity": 0.85,
+      },
+    });
+
+    map.addLayer({
+      id: "neon-coastline-core",
+      type: "line",
+      source: "neon-coastlines",
+      paint: {
+        "line-color": "#E0F2FE",
+        "line-width": 1.2,
+        "line-opacity": 0.95,
+      },
+    });
+
+    // 3. High-Intensity Attribution Laser Beam
+    const s = useCommandStore.getState();
+    const candidateList = propVessels ?? s.candidateVessels;
+    const suspect = candidateList.find((v) => v.attributionRank === 1);
+    const origin = s.driftResult?.reconstructedOrigin;
+    const vCoord: [number, number] = suspect ? [suspect.longitude, suspect.latitude] : [69.251, 21.914];
+    const oCoord: [number, number] = origin ? [origin.longitude, origin.latitude] : [68.892, 21.654];
+
+    map.addSource("attribution-laser", {
+      type: "geojson",
+      data: generateLaserAttributionGeoJson(vCoord, oCoord),
+    });
+
+    map.addLayer({
+      id: "laser-outer-glow",
+      type: "line",
+      source: "attribution-laser",
+      paint: {
+        "line-color": "#22C55E",
+        "line-width": 10,
+        "line-blur": 7,
+        "line-opacity": 0.65,
+      },
+    });
+
+    map.addLayer({
+      id: "laser-mid-glow",
+      type: "line",
+      source: "attribution-laser",
+      paint: {
+        "line-color": "#4ADE80",
+        "line-width": 4.0,
+        "line-blur": 1.5,
+        "line-opacity": 0.9,
+      },
+    });
+
+    map.addLayer({
+      id: "laser-core",
+      type: "line",
+      source: "attribution-laser",
+      paint: {
+        "line-color": "#FFFFFF",
+        "line-width": 1.8,
+        "line-opacity": 1.0,
+      },
+    });
+
+    // 4. Crimson Origin Target Beacon Marker
+    if (originBeaconRef.current) {
+      originBeaconRef.current.remove();
+    }
+    const beaconEl = createCrimsonOriginBeaconElement(
+      origin
+        ? `${new Date(origin.timestampUtc).toISOString().substring(11, 16)} UTC (T-${origin.hoursBeforeObservation}H)`
+        : "03:15 UTC (T-12H)"
+    );
+    originBeaconRef.current = new maplibregl.Marker({ element: beaconEl, anchor: "center" })
+      .setLngLat(oCoord)
+      .addTo(map);
+
     // Interactive clicks on infrastructure nodes
     map.on("click", "infra-dot", (e) => {
       const feat = e.features?.[0];
@@ -1027,8 +1203,8 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
       zoom: 8,
       pitch: 15,
       attributionControl: false,
-      pitchWithRotate: false,
-      dragRotate: false,
+      pitchWithRotate: true,
+      dragRotate: true,
       canvasContextAttributes: { antialias: true },
     });
 
@@ -1051,11 +1227,64 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
       markersRef.current.forEach((m) => m.remove());
       markersRef.current.length = 0;
       markersByImoRef.current.clear();
+      if (originBeaconRef.current) {
+        originBeaconRef.current.remove();
+        originBeaconRef.current = null;
+      }
       map.remove();
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* Dynamic Attribution Laser & Origin Beacon Sync */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    const candidateList = propVessels ?? store.candidateVessels;
+    const suspect = candidateList.find((v) => v.attributionRank === 1);
+    const origin = store.driftResult?.reconstructedOrigin;
+    const vCoord: [number, number] = suspect ? [suspect.longitude, suspect.latitude] : [69.251, 21.914];
+    const oCoord: [number, number] = origin ? [origin.longitude, origin.latitude] : [68.892, 21.654];
+
+    const laserSource = map.getSource("attribution-laser") as maplibregl.GeoJSONSource | undefined;
+    if (laserSource) {
+      laserSource.setData(generateLaserAttributionGeoJson(vCoord, oCoord));
+    }
+
+    if (originBeaconRef.current) {
+      originBeaconRef.current.setLngLat(oCoord);
+    }
+  }, [store.candidateVessels, store.driftResult, propVessels, mapLoaded]);
+
+  /* 3D Isometric Holographic Theatre Camera Controller (Image 2) */
+  const toggleHolo3D = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const next = !isHolo3D;
+    setIsHolo3D(next);
+
+    if (next) {
+      map.dragRotate.enable();
+      map.touchZoomRotate.enableRotation();
+      map.easeTo({
+        center: [69.18, 21.82],
+        zoom: 9.15,
+        pitch: 58,
+        bearing: -32,
+        duration: 1800,
+      });
+    } else {
+      map.easeTo({
+        center: [69.112, 21.845],
+        zoom: 8,
+        pitch: 15,
+        bearing: 0,
+        duration: 1400,
+      });
+    }
+  }, [isHolo3D]);
 
   /* Layer visibility sync */
   useEffect(() => {
@@ -1414,6 +1643,21 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
             </button>
           );
         })}
+
+        <div className="h-4 w-px bg-line mx-0.5" />
+        <button
+          onClick={toggleHolo3D}
+          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[10px] font-bold transition-all duration-200 ${
+            isHolo3D
+              ? "bg-gradient-to-r from-cyan-500/25 to-teal-500/25 text-cyan-300 border border-cyan-400/80 shadow-[0_0_15px_rgba(6,182,212,0.5)]"
+              : "text-ink-dim hover:text-cyan-300 hover:bg-cyan-950/30 border border-transparent"
+          }`}
+          title="Toggle 3D Isometric Holographic Maritime Theatre (Image 2)"
+        >
+          <Sparkles className="h-3 w-3 text-cyan-400" />
+          <span>3D HOLO THEATRE</span>
+          {isHolo3D && <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping" />}
+        </button>
       </div>
 
       {/* ── FLOATING INTELLIGENCE HUDS WITH LEADER LINES ── */}
@@ -1425,8 +1669,26 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
         />
       )}
 
-      {mapLoaded && activeHud === "vessel" && topVessel && vesselPlacement && (
-        <VesselInvestigationHud vessel={topVessel} placement={vesselPlacement} />
+      {/* ── 3D HOLOGRAPHIC AIS TELEMETRY CARD (IMAGE 2) ── */}
+      {mapLoaded && topVessel && vesselPlacement && (isHolo3D || activeHud === "vessel" || demoStep >= 7) && (
+        <div
+          style={{
+            position: "absolute",
+            left: `${vesselPlacement.boxX}px`,
+            top: `${Math.max(12, vesselPlacement.boxY - 30)}px`,
+            zIndex: 35,
+          }}
+          className="animate-in fade-in zoom-in-95 duration-300"
+        >
+          <HudLeaderLine placement={vesselPlacement} color="#06B6D4" />
+          <HoloVesselCard
+            vessel={topVessel}
+            onClose={() => {
+              if (activeHud === "vessel") setActiveHud(null);
+            }}
+            onNavigateForensics={() => router.push("/attribution")}
+          />
+        </div>
       )}
 
       {mapLoaded && activeHud === "port" && selectedPortNode && portPlacement && (
@@ -1519,6 +1781,20 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
           title="Reset Theatre View"
         >
           <RotateCcw className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={toggleHolo3D}
+          className={`relative rounded-lg p-1.5 transition-all ${
+            isHolo3D
+              ? "bg-cyan-500/30 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.6)] ring-1 ring-cyan-400"
+              : "text-ink-dim hover:bg-panel-hover hover:text-ink"
+          }`}
+          title={isHolo3D ? "Exit 3D Isometric Holo Mode" : "Switch to 3D Isometric Holo Theatre (Image 2)"}
+        >
+          <Sparkles className={`h-3.5 w-3.5 ${isHolo3D ? "text-cyan-300 animate-pulse" : ""}`} />
+          {isHolo3D && (
+            <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-cyan-400 ring-1 ring-black" />
+          )}
         </button>
       </div>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Satellite,
   Radar,
@@ -12,6 +12,7 @@ import {
   CloudSun,
   Activity,
   Search,
+  Globe,
 } from "lucide-react";
 import { useCommandStore } from "@/lib/store";
 import { bootstrapApp } from "@/lib/bootstrap";
@@ -28,6 +29,7 @@ const fmtIst = (d: Date) => {
 
 export const TopBar: React.FC = () => {
   const router = useRouter();
+  const pathname = usePathname();
   const [now, setNow] = useState<Date | null>(null);
 
   const { isDemoRunning, demoStep, isDemoPaused, startDemo, resetDemo, dataSource } =
@@ -220,6 +222,32 @@ export const TopBar: React.FC = () => {
               title="Reset demo state"
             >
               <RotateCcw className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          <div className="h-5 w-px bg-line mx-1" />
+
+          {/* ── 3D HOLOGRAPHIC COMMAND THEATRE QUICK SWITCHER (IMAGE 1 & 2) ── */}
+          {pathname === "/globe" ? (
+            <button
+              onClick={() => router.push("/operations")}
+              className="group relative flex items-center gap-1.5 rounded-lg border border-teal/50 bg-gradient-to-r from-teal/20 to-blue/20 px-2.5 py-1.5 font-mono text-xs font-bold text-teal shadow-[0_0_15px_rgba(34,211,167,0.25)] transition-all hover:bg-teal/30 hover:shadow-[0_0_20px_rgba(34,211,167,0.45)] focus-ring active:scale-95"
+              title="Return to Tactical 2D/3D Operations Map"
+            >
+              <Waves className="h-3.5 w-3.5 text-aqua group-hover:scale-110 transition-transform" />
+              <span>LIVE COP MAP</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => router.push("/globe")}
+              className="group relative flex items-center gap-1.5 rounded-lg border border-cyan-500/50 bg-gradient-to-r from-cyan-950/40 via-blue-950/30 to-bg-2 px-2.5 py-1.5 font-mono text-xs font-bold text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.25)] transition-all hover:border-cyan-400 hover:bg-cyan-900/40 hover:shadow-[0_0_22px_rgba(6,182,212,0.45)] focus-ring active:scale-95"
+              title="Open Global 3D Holographic Globe Command Theatre (Image 1)"
+            >
+              <Globe className="h-3.5 w-3.5 text-cyan-400 group-hover:scale-110 group-hover:rotate-12 transition-transform" />
+              <span>3D THEATRE</span>
+              <span className="rounded bg-cyan-500/20 px-1 py-0.2 text-[8px] font-mono text-cyan-200">
+                GLOBE
+              </span>
             </button>
           )}
         </div>

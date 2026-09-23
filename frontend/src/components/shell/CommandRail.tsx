@@ -13,6 +13,7 @@ import {
   FileText,
   Settings,
   Sparkles,
+  Globe,
 } from "lucide-react";
 import { useCommandStore } from "@/lib/store";
 
@@ -31,6 +32,7 @@ export const CommandRail: React.FC = () => {
   const { selectedIncidentId, selectedVesselImo } = useCommandStore();
 
   const items: RailItem[] = [
+    { key: "globe", href: "/globe", label: "3D Theatre", icon: Globe, scope: "globe" },
     { key: "operations", href: "/operations", label: "Operations", icon: Compass, scope: "operations" },
     {
       key: "sar",
