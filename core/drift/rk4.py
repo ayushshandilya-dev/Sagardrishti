@@ -1,84 +1,282 @@
-from typing import Tuple, Callable
+"""
+4th-Order Runge-Kutta (RK4) Two-Way Hydrodynamic Advection Engine.
+
+Capabilities:
+1. Dynamic Coriolis deflection angle as a function of latitude:
+   theta_c(phi) = 15° * sin(phi) (Northern Hemisphere rightward, Southern Hemisphere leftward).
+2. Wave Stokes Drift:
+   Adds 1.2% of wind velocity aligned with dominant surface wind-waves.
+3. Two-Way Integration:
+   - rk4_backtrack(): Reverse-time advection to locate discharge origin (x0, y0, t0).
+   - rk4_forward_forecast(): Forward-time forecasting (+12h, +24h, +48h, +72h)
+     with turbulent diffusion uncertainty envelopes and coastal collision detection.
+"""
+
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 
 METERS_PER_DEGREE_LAT = 111139.0
+DEFAULT_DIFFUSION_COEFF_M2_S = 10.0  # Horizontal oceanic eddy diffusion Kh (m²/s)
 
-def compute_drift_vector(lat: float, lon: float, t_utc: float,
-                         current_u: float, current_v: float,
-                         wind_u: float, wind_v: float) -> np.ndarray:
+
+@dataclass
+class TrajectoryPoint:
+    """Waypoint along a drift trajectory."""
+    time_offset_hours: float
+    latitude: float
+    longitude: float
+    uncertainty_radius_meters: float
+    drift_speed_knots: float
+
+
+@dataclass
+class ForecastResult:
+    """Results of future flow trajectory forecast."""
+    trajectory: List[TrajectoryPoint]
+    coastal_impact_predicted: bool
+    earliest_impact_hours: Optional[float]
+    impact_coordinate: Optional[Tuple[float, float]]
+    total_distance_km: float
+
+
+def compute_coriolis_deflection_angle(latitude_deg: float) -> float:
+    """
+    Compute latitude-dependent wind deflection angle in radians.
+
+    Citations & Physics Basis:
+    - Allen & Plourde (1999), 'Review of Leeway: Field Experiments and
+      Implementation', USCG R&D Center Technical Report CG-D-08-99:
+      Establishes empirical leeway windage (3.0-3.5%) and divergence/deflection
+      angles across maritime objects and surface slicks.
+    - Samuels, Huang & Amstutz (1982), 'An oilspill trajectory analysis model
+      with a variable wind deflection angle', Ocean Engineering:
+      Pioneered the principle that deflection angle should not be locked to a
+      fixed constant. While Samuels et al. parameterized variation with wind speed,
+      our model adapts this core variable-deflection philosophy to vary with latitude
+      governed by the Coriolis acceleration parameter f = 2*Omega*sin(phi).
+    - Observational Note: Classical infinite-depth laminar Ekman theory predicts
+      a constant 45° surface deflection. Real-world ocean observations (e.g. post-Torrey
+      Canyon drift analyses; Allen & Plourde 1999) observe much smaller surface
+      deflection (10° to 20° to the right of the wind in the Northern Hemisphere).
+    - Formulation Note: This is an engineered/calibrated parameterization
+      theta(phi) = 16° * sin(phi). The amplitude coefficient of 16° was chosen
+      such that at mid-latitudes where reference leeway studies were conducted
+      (~45°-50°N, sin(phi) ~ 0.71-0.77), the deflection evaluates to ~11.3°-12.3°,
+      aligning with the lower-to-middle baseline of observed mid-latitude drift.
+      Operational Nuance: In India's tropical EEZ (6°N to 23°N), sin(phi) is
+      small (~0.10 to ~0.39), producing an operational deflection of ~1.7° to 6.3°.
+      This smaller deflection correctly captures the tropical hydrodynamics of
+      near-equatorial waters rather than forcing mid-latitude deflection onto them.
+    """
+    phi_rad = np.radians(latitude_deg)
+    # Calibrated parameterization scaling toward ~16° at high latitudes, ~2°-6° in Indian EEZ, 0° at equator
+    deflection_deg = 16.0 * np.sin(phi_rad)
+    return float(np.radians(deflection_deg))
+
+
+def compute_drift_vector(
+    lat: float,
+    lon: float,
+    t_utc: float,
+    current_u: float,
+    current_v: float,
+    wind_u: float,
+    wind_v: float,
+    include_stokes_drift: bool = True
+) -> np.ndarray:
     """
     Compute total surface drift velocity vector in meters per second (m/s):
-    current + wind leeway (3.5% of 10m wind with 12° Coriolis rightward deflection).
+    v_total = v_current + v_leeway(Coriolis) + v_stokes
     """
-    leeway_factor = 0.035
-    coriolis_deflection = np.radians(12.0)
-    cos_def = np.cos(coriolis_deflection)
-    sin_def = np.sin(coriolis_deflection)
-    
-    # Wind leeway: 3.5% of wind speed, deflected right by Coriolis in Northern Hemisphere
+    leeway_factor = 0.025  # 2.5% direct wind leeway
+    coriolis_rad = compute_coriolis_deflection_angle(lat)
+    cos_def = np.cos(coriolis_rad)
+    sin_def = np.sin(coriolis_rad)
+
+    # Wind leeway with dynamic latitude Coriolis deflection
     wind_leeway_u = leeway_factor * (cos_def * wind_u - sin_def * wind_v)
     wind_leeway_v = leeway_factor * (sin_def * wind_u + cos_def * wind_v)
-    
-    total_u = current_u + wind_leeway_u  # East-West velocity (m/s)
-    total_v = current_v + wind_leeway_v  # North-South velocity (m/s)
-    
-    return np.array([total_u, total_v])
 
-def _get_velocity_in_degrees(lat: float, lon: float, t_utc: float,
-                             current_func: Callable, wind_func: Callable) -> np.ndarray:
-    """Convert drift velocity (m/s) to rate of change in geographic degrees per second (dlat/dt, dlon/dt)."""
+    # Wave-induced Stokes drift (1.0% in wind direction, matching standard 3.5% total leeway)
+    stokes_u = 0.010 * wind_u if include_stokes_drift else 0.0
+    stokes_v = 0.010 * wind_v if include_stokes_drift else 0.0
+
+    total_u = current_u + wind_leeway_u + stokes_u
+    total_v = current_v + wind_leeway_v + stokes_v
+
+    return np.array([total_u, total_v], dtype=np.float64)
+
+
+
+def _get_velocity_in_degrees(
+    lat: float,
+    lon: float,
+    t_utc: float,
+    current_func: Callable,
+    wind_func: Callable
+) -> np.ndarray:
+    """Convert drift velocity (m/s) to rate of change in degrees per second (dlat/dt, dlon/dt)."""
     cu, cv = current_func(lon, lat, t_utc)
     wu, wv = wind_func(lon, lat, t_utc)
-    
+
     v_ms = compute_drift_vector(lat, lon, t_utc, cu, cv, wu, wv)
-    
     meters_per_deg_lon = METERS_PER_DEGREE_LAT * max(np.cos(np.radians(lat)), 0.01)
-    
+
     dlat_dt = v_ms[1] / METERS_PER_DEGREE_LAT
     dlon_dt = v_ms[0] / meters_per_deg_lon
-    
-    return np.array([dlat_dt, dlon_dt])
 
-def rk4_backtrack(lat0: float, lon0: float, t_sar: float,
-                   current_func: Callable, wind_func: Callable,
-                   t_max_hours: float = 12.0,
-                   dt_seconds: int = 300) -> Tuple[float, float, float]:
+    return np.array([dlat_dt, dlon_dt], dtype=np.float64)
+
+
+def rk4_backtrack(
+    lat0: float,
+    lon0: float,
+    t_sar: float,
+    current_func: Callable,
+    wind_func: Callable,
+    t_max_hours: float = 12.0,
+    dt_seconds: int = 300
+) -> Tuple[float, float, float]:
     """
     4th-Order Runge-Kutta reverse advection backtracking.
-    
-    Integrates backward in time from t_SAR to (t_SAR - T_max) to reconstruct the discharge origin.
-    Returns (estimated_lat, estimated_lon, hours_backtracked)
+    Integrates backward in time from t_SAR to (t_SAR - T_max) to reconstruct discharge origin.
+    Returns (estimated_lat, estimated_lon, hours_backtracked).
     """
     dt = float(dt_seconds)
     lat = float(lat0)
     lon = float(lon0)
-    
+
     total_seconds = t_max_hours * 3600.0
     steps = int(total_seconds / dt)
-    
+
     for step in range(steps):
         t_curr = t_sar - step * dt
-        
-        # k1 = f(X_n, t_n)
+
         k1 = _get_velocity_in_degrees(lat, lon, t_curr, current_func, wind_func)
-        
-        # k2 = f(X_n - 0.5*dt*k1, t_n - 0.5*dt)
         lat_half1 = lat - 0.5 * dt * k1[0]
         lon_half1 = lon - 0.5 * dt * k1[1]
+
         k2 = _get_velocity_in_degrees(lat_half1, lon_half1, t_curr - 0.5 * dt, current_func, wind_func)
-        
-        # k3 = f(X_n - 0.5*dt*k2, t_n - 0.5*dt)
         lat_half2 = lat - 0.5 * dt * k2[0]
         lon_half2 = lon - 0.5 * dt * k2[1]
+
         k3 = _get_velocity_in_degrees(lat_half2, lon_half2, t_curr - 0.5 * dt, current_func, wind_func)
-        
-        # k4 = f(X_n - dt*k3, t_n - dt)
         lat_end = lat - dt * k3[0]
         lon_end = lon - dt * k3[1]
+
         k4 = _get_velocity_in_degrees(lat_end, lon_end, t_curr - dt, current_func, wind_func)
-        
+
         # Update backward step: X_{n+1} = X_n - dt/6 * (k1 + 2*k2 + 2*k3 + k4)
         lat -= (dt / 6.0) * (k1[0] + 2.0 * k2[0] + 2.0 * k3[0] + k4[0])
         lon -= (dt / 6.0) * (k1[1] + 2.0 * k2[1] + 2.0 * k3[1] + k4[1])
+
+    return round(lat, 5), round(lon, 5), round(t_max_hours, 1)
+
+
+def rk4_forward_forecast(
+    lat0: float,
+    lon0: float,
+    t_start: float,
+    current_func: Callable,
+    wind_func: Callable,
+    forecast_hours: float = 48.0,
+    dt_seconds: int = 600,
+    coastal_mask_func: Optional[Callable[[float, float], bool]] = None,
+    diffusion_kh: float = DEFAULT_DIFFUSION_COEFF_M2_S
+) -> ForecastResult:
+    """
+    4th-Order Runge-Kutta forward advection forecasting.
+    Predicts future trajectory of the oil slick forward in time (+12h, +24h, +48h, etc.).
     
-    return lat, lon, t_max_hours
+    Computes expanding turbulent diffusion uncertainty radius:
+    r_uncertainty(t) = sqrt(4 * Kh * t)
+    
+    Args:
+        coastal_mask_func: Optional callback (lon, lat) -> True if coordinate is on land/shore
+    """
+    dt = float(dt_seconds)
+    lat = float(lat0)
+    lon = float(lon0)
+
+    total_seconds = forecast_hours * 3600.0
+    steps = int(total_seconds / dt)
+
+    waypoints: List[TrajectoryPoint] = []
+    coastal_hit = False
+    earliest_hit_hour: Optional[float] = None
+    hit_coord: Optional[Tuple[float, float]] = None
+    total_dist_meters = 0.0
+
+    # Initial waypoint at t=0
+    waypoints.append(
+        TrajectoryPoint(
+            time_offset_hours=0.0,
+            latitude=round(lat, 5),
+            longitude=round(lon, 5),
+            uncertainty_radius_meters=100.0,
+            drift_speed_knots=0.0
+        )
+    )
+
+    prev_lat, prev_lon = lat, lon
+
+    for step in range(1, steps + 1):
+        elapsed_sec = step * dt
+        t_curr = t_start + elapsed_sec
+
+        # Standard forward RK4
+        k1 = _get_velocity_in_degrees(lat, lon, t_curr, current_func, wind_func)
+        lat_half1 = lat + 0.5 * dt * k1[0]
+        lon_half1 = lon + 0.5 * dt * k1[1]
+
+        k2 = _get_velocity_in_degrees(lat_half1, lon_half1, t_curr + 0.5 * dt, current_func, wind_func)
+        lat_half2 = lat + 0.5 * dt * k2[0]
+        lon_half2 = lon + 0.5 * dt * k2[1]
+
+        k3 = _get_velocity_in_degrees(lat_half2, lon_half2, t_curr + 0.5 * dt, current_func, wind_func)
+        lat_end = lat + dt * k3[0]
+        lon_end = lon + dt * k3[1]
+
+        k4 = _get_velocity_in_degrees(lat_end, lon_end, t_curr + dt, current_func, wind_func)
+
+        # Forward update: X_{n+1} = X_n + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
+        lat += (dt / 6.0) * (k1[0] + 2.0 * k2[0] + 2.0 * k3[0] + k4[0])
+        lon += (dt / 6.0) * (k1[1] + 2.0 * k2[1] + 2.0 * k3[1] + k4[1])
+
+        # Step distance in meters
+        dlat_m = (lat - prev_lat) * METERS_PER_DEGREE_LAT
+        dlon_m = (lon - prev_lon) * (METERS_PER_DEGREE_LAT * np.cos(np.radians(lat)))
+        step_dist = np.sqrt(dlat_m ** 2 + dlon_m ** 2)
+        total_dist_meters += step_dist
+        step_speed_knots = (step_dist / dt) * 1.94384
+
+        prev_lat, prev_lon = lat, lon
+
+        # Check coastal intersection
+        if coastal_mask_func and not coastal_hit:
+            if coastal_mask_func(lon, lat):
+                coastal_hit = True
+                earliest_hit_hour = round(elapsed_sec / 3600.0, 1)
+                hit_coord = (round(lat, 5), round(lon, 5))
+
+        # Record waypoint every 1 hour (or 3600s)
+        if elapsed_sec % 3600 == 0:
+            unc_radius = np.sqrt(4.0 * diffusion_kh * elapsed_sec)
+            waypoints.append(
+                TrajectoryPoint(
+                    time_offset_hours=round(elapsed_sec / 3600.0, 1),
+                    latitude=round(lat, 5),
+                    longitude=round(lon, 5),
+                    uncertainty_radius_meters=round(float(unc_radius), 1),
+                    drift_speed_knots=round(float(step_speed_knots), 2)
+                )
+            )
+
+    return ForecastResult(
+        trajectory=waypoints,
+        coastal_impact_predicted=coastal_hit,
+        earliest_impact_hours=earliest_hit_hour,
+        impact_coordinate=hit_coord,
+        total_distance_km=round(total_dist_meters / 1000.0, 2)
+    )

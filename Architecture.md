@@ -290,8 +290,11 @@ When an oil spill is observed on satellite imagery at time $t_{\text{SAR}}$, the
 A surface oil slick drifts due to a combination of Eulerian surface current and surface wind leeway:
 $$\vec{V}_{\text{drift}}(x, y, t) = \vec{V}_{\text{current}}(x, y, t) + \vec{V}_{\text{wind-leeway}}(x, y, t) + \vec{V}_{\text{wave-drift}}(x, y, t)$$
 1. **Current Component**: $\vec{V}_{\text{current}} = (u_c, v_c)$ obtained from INCOIS / HYCOM.
-2. **Wind Leeway Component**: Empirical wind leeway factor $\alpha \approx 3.0\% - 3.5\%$ of the $10\text{-meter}$ wind velocity $\vec{U}_{10} = (u_{10}, v_{10})$, deflected by Coriolis deflection angle $\theta_{\text{Coriolis}} \approx 10^\circ - 15^\circ$ to the right of the wind in the Northern Hemisphere:
-   $$\vec{V}_{\text{wind-leeway}} = \alpha \cdot \mathbf{R}(\theta_{\text{Coriolis}}) \cdot \vec{U}_{10}$$
+2. **Wind Leeway Component**: Empirical wind leeway factor $\alpha \approx 3.0\% - 3.5\%$ of the $10\text{-meter}$ wind velocity $\vec{U}_{10} = (u_{10}, v_{10})$, deflected by a variable wind deflection angle $\theta_{\text{deflection}}(\phi)$ to the right of the wind in the Northern Hemisphere:
+   $$\vec{V}_{\text{wind-leeway}} = \alpha \cdot \mathbf{R}(\theta_{\text{deflection}}) \cdot \vec{U}_{10}$$
+   *Citations & Operational Physics:* While **Samuels, Huang & Amstutz (1982)** (*Ocean Engineering*) pioneered allowing deflection angles to vary (parameterizing variation with wind speed), SAGAR-DRISHTI extends this variable-deflection philosophy to vary with latitude governed by the planetary vorticity parameter $f = 2\Omega\sin(\phi)$. Grounded in the leeway field review by **Allen & Plourde (1999)** (*USCG R&D Report CG-D-08-99*), the deflection amplitude is calibrated to $16^\circ$:
+   $$\theta(\phi) = 16^\circ \cdot \sin(\phi)$$
+   The $16^\circ$ coefficient ensures that at mid-latitudes where benchmark drift studies were conducted ($\sim 45^\circ - 50^\circ\text{N}$, $\sin(\phi) \approx 0.71 - 0.77$), the formula outputs $\sim 11.3^\circ - 12.3^\circ$, aligning with the lower-to-middle range of field observations (10°–20°). In India's tropical EEZ ($6^\circ\text{N}$ to $23^\circ\text{N}$), the deflection predictably scales down to $1.7^\circ - 6.3^\circ$, capturing tropical near-equatorial hydrodynamics where Coriolis acceleration is weak.
 3. **Wave Stokes Drift**: Approximate parameterization: $\vec{V}_{\text{Stokes}} \approx 0.012 \cdot \vec{U}_{10}$.
 
 ### 6.2 4th-Order Runge-Kutta (RK4) Reverse Backtrack Simulation

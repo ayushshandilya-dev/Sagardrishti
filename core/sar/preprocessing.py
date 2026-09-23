@@ -3,11 +3,27 @@ SAR Preprocessing Module for Sentinel-1 GRD Data
 Implements radiometric calibration and Refined Lee speckle filtering.
 """
 
+from __future__ import annotations
+
 import numpy as np
-import rasterio
-from rasterio.enums import Resampling
+try:
+    import rasterio
+    from rasterio.enums import Resampling
+    HAS_RASTERIO = True
+except ImportError:
+    rasterio = None
+    Resampling = None
+    HAS_RASTERIO = False
+
 from scipy import ndimage
-from skimage.restoration import denoise_nl_means, estimate_sigma
+try:
+    from skimage.restoration import denoise_nl_means, estimate_sigma
+    HAS_SKIMAGE_RESTORATION = True
+except ImportError:
+    denoise_nl_means = None
+    estimate_sigma = None
+    HAS_SKIMAGE_RESTORATION = False
+
 from typing import Tuple, Optional, Dict, Any
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,13 +38,14 @@ class SARMetadata:
     polarization: str
     acquisition_time: str
     orbit_direction: str
-    incidence_angle: np.ndarray
-    calibration_vector: np.ndarray
-    noise_vector: np.ndarray
-    width: int
-    height: int
-    transform: rasterio.Affine
-    crs: rasterio.crs.CRS
+    incidence_angle: Optional[np.ndarray] = None
+    calibration_vector: Optional[np.ndarray] = None
+    noise_vector: Optional[np.ndarray] = None
+    width: int = 512
+    height: int = 512
+    transform: Optional[Any] = None
+    crs: Optional[Any] = None
+
 
 
 @dataclass
@@ -282,20 +299,52 @@ def apply_speckle_filter(
 
 def create_land_mask(
     scene: SARScene,
-    threshold_db: float = -15.0
+    threshold_db: float = -15.0,
+    bounds: Optional[Tuple[float, float, float, float]] = None,
+    gshhg_path: Optional[Path] = None,
+    srtm_dem_path: Optional[Path] = None,
+    seaward_buffer_meters: float = 500.0,
+    dem_elevation: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
-    Create land mask from SAR backscatter.
-    Land typically has higher backscatter than water.
-    """
-    if scene.vv_db is not None:
-        mask = scene.vv_db > threshold_db
-    elif scene.vh_db is not None:
-        mask = scene.vh_db > threshold_db
-    else:
-        mask = np.zeros((scene.metadata.height, scene.metadata.width), dtype=bool)
+    Create comprehensive land, coastline, port, and mudflat mask using LandMaskEngine.
     
-    return mask
+    Combines:
+    1. Vector coastline geometries (GSHHG datasets or Indian economic corridor baselines).
+    2. SRTM digital elevation & shallow intertidal water body thresholding.
+    3. Seaward morphological buffer (500m) to suppress nearshore breaking wave clutter.
+    4. Radiometric backscatter thresholding (sigma0 > threshold_db).
+    """
+    try:
+        from core.sar.landmask import LandMaskEngine, MaskingConfig
+        cfg = MaskingConfig(
+            gshhg_path=gshhg_path,
+            srtm_dem_path=srtm_dem_path,
+            seaward_buffer_meters=seaward_buffer_meters,
+            radiometric_land_threshold_db=threshold_db,
+            use_builtin_fallback=True
+        )
+        engine = LandMaskEngine(cfg)
+        h = scene.metadata.height if scene.metadata else (scene.vv_db.shape[0] if scene.vv_db is not None else 512)
+        w = scene.metadata.width if scene.metadata else (scene.vv_db.shape[1] if scene.vv_db is not None else 512)
+        
+        return engine.create_unified_land_mask(
+            vv_db=scene.vv_db,
+            bounds=bounds,
+            shape=(h, w),
+            dem_elevation=dem_elevation
+        )
+    except Exception as exc:
+        logger.warning(f"LandMaskEngine fallback to radiometric thresholding: {exc}")
+        if scene.vv_db is not None:
+            return scene.vv_db > threshold_db
+        elif scene.vh_db is not None:
+            return scene.vh_db > threshold_db
+        else:
+            h = scene.metadata.height if scene.metadata else 512
+            w = scene.metadata.width if scene.metadata else 512
+            return np.zeros((h, w), dtype=bool)
+
 
 
 def preprocess_sentinel1_scene(
@@ -399,3 +448,19 @@ def compute_polarization_features(vv_db: np.ndarray, vh_db: np.ndarray) -> Dict[
     features["vv_plus_vh"] = vv_db + vh_db
     features["vv_minus_vh"] = vv_db - vh_db
     return features
+
+
+def load_sar_scene(filepath: Path, sensor: str = "auto") -> SARScene:
+    """
+    Sensor-agnostic loader for SAR imagery.
+    Supports Sentinel-1 GRD and ISRO EOS-04 (RISAT-1A).
+    """
+    path_str = str(filepath).lower()
+    sensor_lower = sensor.lower()
+
+    if sensor_lower == "eos04" or sensor_lower == "risat" or "eos04" in path_str or "risat" in path_str:
+        from core.sar.eos04 import read_eos04_scene
+        return read_eos04_scene(filepath)
+    
+    # Default to Sentinel-1 GRD
+    return read_sentinel1_grd(filepath)

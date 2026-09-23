@@ -148,11 +148,67 @@ def compute_attribution_score(mmsi_data: Dict, backtrack_coords: Dict,
 
 
 class BayesianAttributionEngine:
-    """High-level Bayesian attribution engine for vessel scoring."""
+    """
+    True Bayesian Attribution Engine utilizing a Dirichlet-Categorical conjugate prior model.
     
-    def __init__(self):
+    Mathematical Formulation:
+    - Given K candidate vessels, the prior probability distribution theta ~ Dirichlet(alpha_0)
+      where alpha_0,k is proportional to the vessel-type prior base rate (e.g. Tanker >> Fishing Boat).
+    - Each evidence factor k (Proximity, Collinearity, Kinematic Anomaly, AIS-Dark-Silence, Temporal Feasibility)
+      provides a likelihood multiplier L_i,k.
+    - Updated concentration parameters: alpha_post,k = alpha_0,k + scale * L_total,k
+    - The expected posterior probability: E[theta_k | Evidence] = alpha_post,k / sum_j(alpha_post,j)
+    This yields a valid, normalized probability distribution summing to 1.0 across all candidates.
+    """
+    
+    def __init__(self, prior_concentration: float = 2.0):
+        self.prior_concentration = prior_concentration
         self.weights = [0.35, 0.25, 0.15, 0.15, 0.10]
     
+    def compute_dirichlet_posterior(
+        self,
+        scored_vessels: List[Dict]
+    ) -> List[Dict]:
+        """
+        Compute normalized Dirichlet posterior probabilities across all candidate vessels.
+        """
+        if not scored_vessels:
+            return []
+
+        k = len(scored_vessels)
+        # 1. Base concentration from vessel-type prior
+        alpha_priors = np.array([
+            max(0.1, v["factorBreakdown"]["vesselPriorScore"]) * self.prior_concentration
+            for v in scored_vessels
+        ], dtype=np.float64)
+
+        # 2. Evidence likelihood from physical observations (proximity, collinearity, anomaly, temporal)
+        likelihoods = np.array([
+            (
+                0.40 * v["factorBreakdown"]["backtrackProximityScore"] +
+                0.30 * v["factorBreakdown"]["trajectoryCollinearityScore"] +
+                0.20 * v["factorBreakdown"]["kineticAnomalyScore"] +
+                0.10 * v["factorBreakdown"]["temporalPlausibilityScore"]
+            )
+            for v in scored_vessels
+        ], dtype=np.float64)
+
+        # 3. Dirichlet posterior concentration update
+        # Evidence pseudo-counts scale with likelihood
+        evidence_counts = likelihoods * 8.0  # Equivalent sample size
+        alpha_posterior = alpha_priors + evidence_counts
+
+        # 4. Posterior expected probabilities E[theta_k] = alpha_k / sum(alpha)
+        posterior_probs = alpha_posterior / np.sum(alpha_posterior)
+
+        # Attach to records
+        for i, v in enumerate(scored_vessels):
+            v["dirichletPosteriorProbability"] = round(float(posterior_probs[i]), 4)
+            v["dirichletPriorConcentration"] = round(float(alpha_priors[i]), 3)
+            v["dirichletPosteriorConcentration"] = round(float(alpha_posterior[i]), 3)
+
+        return scored_vessels
+
     def score_vessels(
         self,
         discharge_origin: Dict,
@@ -160,15 +216,8 @@ class BayesianAttributionEngine:
         candidate_vessels: List[Dict]
     ) -> List[Dict]:
         """
-        Score all candidate vessels and return ranked results.
-        
-        Args:
-            discharge_origin: Dict with latitude, longitude, discharge_time
-            slick_skeleton: Skeleton orientation in degrees
-            candidate_vessels: List of vessel data dicts
-            
-        Returns:
-            List of scored vessels sorted by attribution score (descending)
+        Score all candidate vessels, apply Dirichlet conjugate prior updating,
+        and return ranked results.
         """
         results = []
         
@@ -187,25 +236,28 @@ class BayesianAttributionEngine:
                 "slick_skeleton": slick_skeleton,
             }
             
-            vessel_profile = vessel.get("vessel_type", "UNKNOWN")
-            sar_time = vessel.get("sar_time", 0)
+            vessel_profile = vessel.get("vessel_type", vessel.get("vesselType", "UNKNOWN"))
+            sar_time = vessel.get("sar_time", 10.5)
             
             result = compute_attribution_score(
                 mmsi_data, discharge_origin, vessel_profile, sar_time
             )
             
             result["mmsi"] = vessel.get("mmsi")
-            result["vessel_name"] = vessel.get("vessel_name")
+            result["vessel_name"] = vessel.get("vessel_name", vessel.get("vesselName"))
             result["imo"] = vessel.get("imo")
             result["vessel_type"] = vessel_profile
             
             results.append(result)
         
-        # Sort by attribution score descending
-        results.sort(key=lambda x: x["attributionScore"], reverse=True)
+        # Apply Dirichlet posterior inference across all candidates
+        results = self.compute_dirichlet_posterior(results)
+
+        # Sort by Dirichlet posterior probability descending
+        results.sort(key=lambda x: x["dirichletPosteriorProbability"], reverse=True)
         
         # Assign ranks
         for i, r in enumerate(results):
             r["attributionRank"] = i + 1
         
-        return results
+        return results

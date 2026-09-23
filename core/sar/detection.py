@@ -3,14 +3,35 @@ SAR Oil Slick Detection Module
 Integrates SegFormer-B3 and DeepLabV3+ for semantic segmentation of oil spills.
 """
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torchvision import transforms
-from segmentation_models_pytorch import Unet, DeepLabV3Plus
-import timm
-from typing import Dict, List, Tuple, Optional, Union
+from __future__ import annotations
+
+try:
+
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from torchvision import transforms
+    HAS_TORCH = True
+except ImportError:
+    torch = None
+    nn = None
+    F = None
+    transforms = None
+    HAS_TORCH = False
+
+try:
+    from segmentation_models_pytorch import Unet, DeepLabV3Plus
+    import timm
+    HAS_SMP = True
+except ImportError:
+    Unet = None
+    DeepLabV3Plus = None
+    timm = None
+    HAS_SMP = False
+
+from typing import Dict, List, Tuple, Optional, Union, Any
 from dataclasses import dataclass
+
 import numpy as np
 from pathlib import Path
 import logging
@@ -27,32 +48,41 @@ class DetectionConfig:
     in_channels: int = 2  # VV + VH
     num_classes: int = 4  # background, oil, biogenic, low-wind, wake
     input_size: Tuple[int, int] = (512, 512)
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    device: str = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"
 
 
-class SegFormerDetector(nn.Module):
+BaseModule = nn.Module if (HAS_TORCH and nn is not None) else object
+
+
+class SegFormerDetector(BaseModule):
     """SegFormer-B3 based oil slick detector."""
     
     def __init__(self, config: DetectionConfig):
+
         super().__init__()
         self.config = config
         
-        self.model = timm.create_model(
-            "segformer_b3",
-            pretrained=config.encoder_weights == "imagenet",
-            num_classes=config.num_classes,
-            in_chans=config.in_channels
-        )
-        
-        self.to(config.device)
-        self.eval()
+        if HAS_SMP and timm is not None:
+            self.model = timm.create_model(
+                "segformer_b3",
+                pretrained=config.encoder_weights == "imagenet",
+                num_classes=config.num_classes,
+                in_chans=config.in_channels
+            )
+            self.to(config.device)
+            self.eval()
+        else:
+            self.model = None
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x)
+    def forward(self, x: Any) -> Any:
+        return self.model(x) if self.model is not None else None
     
     def predict(self, vv: np.ndarray, vh: np.ndarray) -> Dict[str, np.ndarray]:
         """Run inference on VV/VH pair."""
+        if not HAS_TORCH or self.model is None:
+            raise RuntimeError("PyTorch and timm are required for SegFormer inference.")
         input_tensor = self._preprocess(vv, vh)
+
         
         with torch.no_grad():
             logits = self.forward(input_tensor)
@@ -81,27 +111,31 @@ class SegFormerDetector(nn.Module):
         return tensor
 
 
-class DeepLabDetector(nn.Module):
+class DeepLabDetector(BaseModule):
     """DeepLabV3+ based oil slick detector."""
     
     def __init__(self, config: DetectionConfig):
         super().__init__()
         self.config = config
         
-        self.model = DeepLabV3Plus(
-            encoder_name="resnet50",
-            encoder_weights=config.encoder_weights,
-            in_channels=config.in_channels,
-            classes=config.num_classes
-        )
-        
-        self.to(config.device)
-        self.eval()
+        if HAS_SMP and DeepLabV3Plus is not None:
+            self.model = DeepLabV3Plus(
+                encoder_name="resnet50",
+                encoder_weights=config.encoder_weights,
+                in_channels=config.in_channels,
+                classes=config.num_classes
+            )
+            self.to(config.device)
+            self.eval()
+        else:
+            self.model = None
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x)
+    def forward(self, x: Any) -> Any:
+        return self.model(x) if self.model is not None else None
     
     def predict(self, vv: np.ndarray, vh: np.ndarray) -> Dict[str, np.ndarray]:
+        if not HAS_TORCH or self.model is None:
+            raise RuntimeError("PyTorch and segmentation-models-pytorch are required for DeepLab inference.")
         input_tensor = self._preprocess(vv, vh)
         
         with torch.no_grad():
@@ -115,7 +149,7 @@ class DeepLabDetector(nn.Module):
             "prediction": pred.cpu().numpy().squeeze()
         }
     
-    def _preprocess(self, vv: np.ndarray, vh: np.ndarray) -> torch.Tensor:
+    def _preprocess(self, vv: np.ndarray, vh: np.ndarray) -> Any:
         h, w = self.config.input_size
         
         vv_resized = resize_with_padding(vv, (h, w))
@@ -130,31 +164,35 @@ class DeepLabDetector(nn.Module):
         return tensor
 
 
-class UNetDetector(nn.Module):
+class UNetDetector(BaseModule):
     """U-Net based oil slick detector (lightweight alternative)."""
     
     def __init__(self, config: DetectionConfig):
         super().__init__()
         self.config = config
-        
-        self.model = Unet(
-            encoder_name="efficientnet-b3",
-            encoder_weights=config.encoder_weights,
-            in_channels=config.in_channels,
-            classes=config.num_classes
-        )
-        
-        self.to(config.device)
-        self.eval()
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x)
+        if HAS_SMP and Unet is not None:
+            self.model = Unet(
+                encoder_name="efficientnet-b3",
+                encoder_weights=config.encoder_weights,
+                in_channels=config.in_channels,
+                classes=config.num_classes
+            )
+            self.to(config.device)
+            self.eval()
+        else:
+            self.model = None
+
+    def forward(self, x: Any) -> Any:
+        return self.model(x) if self.model is not None else None
     
     def predict(self, vv: np.ndarray, vh: np.ndarray) -> Dict[str, np.ndarray]:
+        if not HAS_TORCH or self.model is None:
+            raise RuntimeError("PyTorch and segmentation-models-pytorch are required for UNet inference.")
         input_tensor = self._preprocess(vv, vh)
         
         with torch.no_grad():
             logits = self.forward(input_tensor)
+
             probs = F.softmax(logits, dim=1)
             pred = torch.argmax(probs, dim=1)
         
@@ -230,13 +268,37 @@ class OilSlickDetector:
         4: "Ship Wake"
     }
     
-    def __init__(self, config: DetectionConfig):
+    def __init__(self, config: DetectionConfig, use_cascade: bool = True):
         self.config = config
+        self.use_cascade = use_cascade
         self.model = create_detector(config)
         self.texture_discriminator = None  # Will be initialized when needed
-    
+        self._cascade_detector = None
+        if self.use_cascade:
+            try:
+                from core.sar.cascade import CascadeOilSpillDetector, CascadeConfig
+                cascade_cfg = CascadeConfig(
+                    model_type=config.model_type,
+                    confidence_threshold=0.55
+                )
+                self._cascade_detector = CascadeOilSpillDetector(cascade_cfg)
+            except Exception as e:
+                logger.debug(f"Cascade detector not initialized: {e}")
+
+    def detect_cascade(
+        self,
+        vv: np.ndarray,
+        vh: Optional[np.ndarray] = None,
+        land_mask: Optional[np.ndarray] = None
+    ) -> Dict:
+        """Run two-stage cascade detection (Fast ROI scan -> Deep multi-scale analysis)."""
+        if self._cascade_detector is not None:
+            return self._cascade_detector.detect(vv, vh, land_mask)
+        return self.detect(vv, vh if vh is not None else vv - 6.0)
+
     def detect(self, vv: np.ndarray, vh: np.ndarray) -> Dict:
-        """Run complete detection pipeline."""
+        """Run complete single-stage detection pipeline."""
+
         # Step 1: Deep learning segmentation
         dl_result = self.model.predict(vv, vh)
         prediction = dl_result["prediction"]

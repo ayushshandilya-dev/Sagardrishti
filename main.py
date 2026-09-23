@@ -11,6 +11,8 @@ import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+import numpy as np
+
 
 # Optional dependencies
 try:
@@ -59,32 +61,127 @@ async def run_detection_pipeline(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Step 1: Load and preprocess SAR data
-    logger.info("Step 1: Loading SAR scene")
+    logger.info("Step 1: Loading SAR scene & executing GSHHG/SRTM coastal masking")
     scene = get_mock_scene(0)  # sample scene doubles as deterministic fixture
     if sar_file is not None:
         logger.warning("Custom SAR ingest ignores remote sensing stack; using sample scene data")
 
-    # Step 2: Detect oil slicks (placeholder for SegFormer/DeepLab)
-    logger.info("Step 2: Extracting slick geometry")
+    # Step 1b: Apply LandMaskEngine (GSHHG coastlines + SRTM topographic mudflat buffer)
+    from core.sar.landmask import LandMaskEngine, MaskingConfig
+    mask_engine = LandMaskEngine(MaskingConfig(seaward_buffer_meters=500.0, use_builtin_fallback=True))
+    bbox = scene.get("spillGeometry", {}).get("polygonGeoJson", {}).get("coordinates", [[]])[0]
+    lons = [p[0] for p in bbox] if bbox else [69.1, 69.2]
+    lats = [p[1] for p in bbox] if bbox else [21.8, 21.9]
+    scene_bounds = (min(lons) - 0.5, min(lats) - 0.5, max(lons) + 0.5, max(lats) + 0.5)
+    coastal_mask = mask_engine.generate_vector_land_mask(scene_bounds, (512, 512))
+    logger.info(f"GSHHG/SRTM masking applied. Coastline/mudflat exclusion pixels: {np.count_nonzero(coastal_mask)}")
+
+    # Step 2: Two-Stage Cascade Detection & slick extraction
+    logger.info("Step 2: Executing Two-Stage Cascade Detection (Fast ROI scan -> Deep analysis)")
+    from core.sar.cascade import CascadeOilSpillDetector, CascadeConfig
+    cascade_detector = CascadeOilSpillDetector(CascadeConfig(tile_size=256, tile_stride=256, min_dark_patch_pixels=50))
+    # Simulated scene VV grid for demonstration
+    np.random.seed(42)
+    demo_vv = -18.0 + np.random.normal(0, 0.4, (512, 512)).astype(np.float32)
+    demo_vv[120:200, 150:230] = -26.0  # Synthetic oil slick
+    cascade_res = cascade_detector.detect(demo_vv, demo_vv - 6.0, land_mask=coastal_mask)
+    logger.info(
+        f"Cascade complete: Stage 1 screened {cascade_res['stage1_telemetry']['total_tiles']} tiles, "
+        f"rejected {cascade_res['stage1_telemetry']['clean_sea_skipped']} clean ocean tiles "
+        f"({cascade_res['stage1_telemetry']['rejection_rate_percent']}% compute saved). "
+        f"Stage 2 evaluated {cascade_res['stage2_evaluations']} candidate ROIs."
+    )
+
+    # Step 2b: Sentinel-2 EO (Optical Multispectral) Cross-Verification
+    logger.info("Step 2b: Sentinel-2 EO (Optical Multispectral) Cross-Verification")
+    from core.optical.sentinel2 import Sentinel2EOVerifier, OpticalScene
+    optical_verifier = Sentinel2EOVerifier(cloud_threshold_percent=60.0)
+    # Synthetic Sentinel-2 MSI scene matching the demo ROI (clear sky conditions)
+    opt_b2 = np.full((512, 512), 0.08, dtype=np.float32)
+    opt_b3 = np.full((512, 512), 0.07, dtype=np.float32)
+    opt_b4 = np.full((512, 512), 0.05, dtype=np.float32)
+    opt_b8 = np.full((512, 512), 0.04, dtype=np.float32)
+    opt_b11 = np.full((512, 512), 0.02, dtype=np.float32)
+    # Enhanced sunglint specular reflectance over the oil slick region
+    opt_b8[120:200, 150:230] = 0.09
+    demo_opt_scene = OpticalScene(
+        b2_blue=opt_b2, b3_green=opt_b3, b4_red=opt_b4, b8_nir=opt_b8, b11_swir1=opt_b11
+    )
+    sar_mask = cascade_res["oil_mask"] > 0
+    opt_res = optical_verifier.verify_sar_detection(demo_opt_scene, sar_mask)
+    logger.info(
+        f"Optical Cross-Verification: Confirmed={opt_res.is_confirmed}, "
+        f"CloudCover={opt_res.cloud_cover_percent:.1f}%, BonnCode='{opt_res.appearance_code.value}', "
+        f"MultiSensorConfidence={opt_res.confidence:.2f}"
+    )
+
+    # Step 2c: CMOD5.N SAR Wind Inversion & Look-Alike Screening
+    logger.info("Step 2c: CMOD5.N SAR Wind Inversion & Low-Wind Screening")
+    from core.sar.cmod5 import assess_wind_lookalike
+    ambient_sea_db = float(np.median(demo_vv))
+    wind_assessment = assess_wind_lookalike(ambient_sea_vv_db=ambient_sea_db, incidence_deg=35.0)
+    logger.info(
+        f"CMOD5.N Inversion: WindSpeed={wind_assessment.wind_speed_ms:.1f} m/s, "
+        f"Status='{wind_assessment.status_label}', Confidence={wind_assessment.confidence:.2f}"
+    )
+
+    # Step 2d: Oil Spill Thickness & Volume Quantification (Hollinger & Bonn Consensus)
+    logger.info("Step 2d: Quantifying Oil Spill Thickness & Volume (Bonn Agreement Consensus)")
+    from core.sar.thickness import quantify_spill_volume
+    volume_res = quantify_spill_volume(
+        slick_mask=sar_mask,
+        damping_grid_db=np.abs(demo_vv - ambient_sea_db),
+        pixel_resolution_m=10.0,
+        override_bonn_code="CODE_4" if opt_res.is_confirmed else None
+    )
+    logger.info(
+        f"Spill Volume Quantified: Area={volume_res.area_km2:.3f} km², "
+        f"VolumeNominal={volume_res.volume_nominal_m3:.1f} m³ (~{volume_res.mass_nominal_tonnes:.1f} tonnes), "
+        f"MeanThickness={volume_res.thickness_mean_microns:.1f} µm, BonnCode={volume_res.dominant_bonn_code}"
+    )
+
+    # Step 2e: Hybrid Fay-Mackay Slick Age & Weathering Modeling
+    logger.info("Step 2e: Modeling Physicochemical Slick Age & Weathering Progression")
+    from core.drift.weathering import FayMackayWeatheringEngine
+    weathering_engine = FayMackayWeatheringEngine()
+    slick_area_m2 = float(np.count_nonzero(sar_mask)) * 100.0  # 10m x 10m pixels
+    weathering_state = weathering_engine.assess_slick_weathering(
+        area_m2=slick_area_m2,
+        major_axis_m=900.0,
+        minor_axis_m=400.0,
+        wind_speed_ms=wind_assessment.wind_speed_ms,
+        sst_celsius=28.0
+    )
+    logger.info(
+        f"Fay-Mackay Age: {weathering_state.age_hours:.1f}h (CI: {weathering_state.age_confidence_interval[0]}-{weathering_state.age_confidence_interval[1]}h), "
+        f"Evaporated={weathering_state.evaporated_fraction*100:.1f}%, EmulsionWater={weathering_state.water_content_fraction*100:.1f}%, "
+        f"Viscosity={weathering_state.viscosity_cp:.0f} cP"
+    )
+
     centroid = scene["spillGeometry"]["centroid"]
     slick_orientation = scene["spillGeometry"]["skeletonOrientationDeg"]
     sar_timestamp = scene["sarMetadata"]["acquisitionUtc"] or scene["timestampUtc"]
 
-    # Step 3: Reverse drift backtracking for each slick root node
-    logger.info("Step 3: Running reverse Lagrangian drift backtracking")
+    # Step 3: Two-Way Hydrodynamic Advection (Dynamic Backtrack + Forward Forecast)
+    logger.info("Step 3: Running Two-Way Hydrodynamic Advection (Reverse Backtrack + Future Forecast)")
     met = get_mock_metocean()
     if metocean_file is not None:
         logger.warning("Custom MetOcean ingest is a stub; using sample INCOIS/ECMWF values")
 
     current_func = lambda lon, lat, t: (met["current_u"], met["current_v"])
     wind_func = lambda lon, lat, t: (met["wind_u"], met["wind_v"])
+    
+    # Use physical Fay-Mackay estimated age to dynamically bound the backtracking window
+    dynamic_backtrack_hours = weathering_state.age_hours if backtrack_hours == BACKTRACK_HOURS_DEFAULT else float(backtrack_hours)
+    
+    from core.drift.rk4 import rk4_forward_forecast
     origin_lat, origin_lon, hours_backtracked = rk4_backtrack(
         lat0=centroid["latitude"],
         lon0=centroid["longitude"],
         t_sar=0.0,  # timeline-relative; drift route supplies epoch offset
         current_func=current_func,
         wind_func=wind_func,
-        t_max_hours=float(backtrack_hours),
+        t_max_hours=dynamic_backtrack_hours,
     )
     backtrack_results = [{
         "slick_id": scene["eventId"],
@@ -97,13 +194,34 @@ async def run_detection_pipeline(
         },
         "slick_orientation": slick_orientation,
     }]
-    logger.info(f"Reconstructed discharge origin {origin_lat:.4f}, {origin_lon:.4f} ({hours_backtracked:.1f}h)")
+    logger.info(f"Reconstructed discharge origin: {origin_lat:.4f}, {origin_lon:.4f} ({hours_backtracked:.1f}h physical age)")
 
-    # Step 4: Bayesian vessel attribution
-    logger.info("Step 4: Running Bayesian vessel attribution")
+    # Forward 48-Hour Future Flow Forecast
+    forecast_res = rk4_forward_forecast(
+        lat0=centroid["latitude"],
+        lon0=centroid["longitude"],
+        t_start=0.0,
+        current_func=current_func,
+        wind_func=wind_func,
+        forecast_hours=48.0,
+    )
+    logger.info(
+        f"Future Flow 48h Forecast: Waypoints={len(forecast_res.trajectory)}, "
+        f"TotalDriftDistance={forecast_res.total_distance_km:.1f} km, CoastalLandfall={forecast_res.coastal_impact_predicted}"
+    )
+
+    # Step 4: Spatiotemporal Traffic Funnel & Forensic Attribution
+    logger.info("Step 4: Running Spatiotemporal Traffic Funnel & Forensic Vessel Attribution")
     vessels = get_mock_ais_vessels()
     if ais_file is not None:
         logger.warning("Custom AIS ingest is a stub; using sample transponder stream")
+
+    from core.correlation.traffic_filter import SpatiotemporalTrafficFilter, FilterConfig
+    from core.correlation.anomaly import AISAnomalyDetector
+    from core.correlation.explainability import AttributionExplainer
+
+    traffic_filter = SpatiotemporalTrafficFilter(FilterConfig(max_search_radius_km=35.0, time_window_hours=6.0))
+    anomaly_detector = AISAnomalyDetector()
 
     attribution_results = []
     for result in backtrack_results:
@@ -113,8 +231,22 @@ async def run_detection_pipeline(
             "longitude": origin["longitude"],
             "discharge_time": 8.0,  # 08:00 UTC estimated discharge window
         }
+
+        # 1. Filter irrelevant marine traffic
+        filter_res = traffic_filter.filter_traffic(
+            candidate_vessels=vessels,
+            discharge_lat=origin["latitude"],
+            discharge_lon=origin["longitude"],
+            discharge_time_hours=8.0
+        )
+        logger.info(
+            f"Traffic Funnel: Evaluated {filter_res.initial_vessel_count} AIS tracks, "
+            f"weeded out {filter_res.rejected_count} irrelevant vessels. "
+            f"Retained {filter_res.retained_vessel_count} high-priority suspects."
+        )
+
         ranked = []
-        for v in vessels:
+        for v in filter_res.filtered_vessels:
             is_top = v["mmsi"] == 419001234
             mmsi_data = {
                 "latitude": backtrack_coords["latitude"] if is_top else v["latitude"],
@@ -128,24 +260,67 @@ async def run_detection_pipeline(
                 "arrival_time_utc": 8.0 if is_top else 11.0,
                 "slick_skeleton": result["slick_orientation"],
             }
+
+            # Evaluate behavioral & AIS dark ship anomalies
+            anomaly_prof = anomaly_detector.evaluate_vessel_behavior(
+                sog_cruise=mmsi_data["speed_over_ground"],
+                sog_during=mmsi_data["speed_over_ground_during"],
+                is_night=mmsi_data["is_night"],
+                course_jitter_deg=18.0 if is_top else 2.0,
+                ais_ping_gap_hours=1.8 if is_top else 0.0  # 1.8h dark-ship silence for top suspect
+            )
+
             score_res = compute_attribution_score(
                 mmsi_data=mmsi_data,
                 backtrack_coords=backtrack_coords,
                 vessel_profile=v["vesselType"],
                 sar_time=10.5,
             )
+
+            # Generate natural language forensic explainability narrative
+            forensic_report = AttributionExplainer.generate_narrative(
+                vessel_name=v["vesselName"],
+                mmsi=v["mmsi"],
+                imo=v["imo"],
+                score=score_res["attributionScore"],
+                breakdown=score_res["factorBreakdown"],
+                closest_dist_m=score_res["closestApproachMeters"],
+                vessel_type=v["vesselType"],
+                anomaly_flags=anomaly_prof.anomaly_flags
+            )
+
             ranked.append({
                 "vesselName": v["vesselName"],
                 "mmsi": v["mmsi"],
                 "imo": v["imo"],
+                "anomalyProfile": anomaly_prof.__dict__,
+                "forensicReport": forensic_report.__dict__,
                 **score_res,
             })
-        ranked.sort(key=lambda r: r["attributionScore"], reverse=True)
+
+        # Apply true Dirichlet-Categorical conjugate prior updating across candidates
+        from core.correlation.attribution import BayesianAttributionEngine
+        bayesian_engine = BayesianAttributionEngine(prior_concentration=2.5)
+        ranked = bayesian_engine.compute_dirichlet_posterior(ranked)
+        ranked.sort(key=lambda r: r.get("dirichletPosteriorProbability", r["attributionScore"]), reverse=True)
+
+        top_v = ranked[0] if ranked else None
+        if top_v:
+            post_p = top_v.get("dirichletPosteriorProbability", top_v["attributionScore"])
+            logger.info(
+                f"Bayesian Dirichlet Result: Top Culprit='{top_v['vesselName']}' (MMSI: {top_v['mmsi']}) "
+                f"PosteriorProbability={post_p:.1%} (LinearConfidence={top_v['attributionScore']:.1%}), "
+                f"Verdict='{top_v['forensicReport']['verdict']}'"
+            )
+            logger.info(f"Legal Narrative: {top_v['forensicReport']['legal_narrative']}")
+
         attribution_results.append({
             "slick_id": result["slick_id"],
-            "top_suspect": ranked[0]["vesselName"] if ranked else None,
+            "top_suspect": top_v["vesselName"] if top_v else None,
             "ranked_vessels": ranked,
         })
+
+
 
     # Step 5: Generate hash-linked evidence ledger
     logger.info("Step 5: Generating cryptographic evidence ledger")
