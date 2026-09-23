@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { useRouter } from "next/navigation";
 import {
   Shield,
@@ -115,6 +116,8 @@ function latLonToVector3(lat: number, lon: number, radius: number): THREE.Vector
 export const HolographicGlobeTheatre: React.FC = () => {
   const router = useRouter();
   const mountRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<GlobeIncident>(INCIDENTS[0]);
   const [autoRotate, setAutoRotate] = useState(true);
   const [activeTab, setActiveTab] = useState<"incidents" | "telemetry">("incidents");
@@ -150,6 +153,7 @@ export const HolographicGlobeTheatre: React.FC = () => {
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
     camera.position.set(0, 8, 36);
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
@@ -157,6 +161,18 @@ export const HolographicGlobeTheatre: React.FC = () => {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
     el.appendChild(renderer.domElement);
+
+    // ── INTERACTIVE 3D ORBIT CONTROLS (FULL MOUSE & TOUCH ROTATION) ──
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.enableZoom = true;
+    controls.minDistance = 15;
+    controls.maxDistance = 65;
+    controls.autoRotate = autoRotate;
+    controls.autoRotateSpeed = 0.7;
+    controls.enablePan = false;
+    controlsRef.current = controls;
 
     // ── LIGHTING ──
     const ambientLight = new THREE.AmbientLight(0x0e253e, 1.4);
@@ -389,9 +405,8 @@ export const HolographicGlobeTheatre: React.FC = () => {
       animId = requestAnimationFrame(animate);
       t += 0.015;
 
-      if (autoRotate) {
-        globeGroup.rotation.y += 0.0018;
-      }
+      // Update 3D Orbit Controls
+      controls.update();
 
       // Rotate pedestal rings in opposing directions
       ring1.rotation.z += 0.004;
@@ -415,6 +430,29 @@ export const HolographicGlobeTheatre: React.FC = () => {
     };
     animate();
 
+    // ── INTERACTIVE PIN RAYCASTING (Click on globe to select incident) ──
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const onPointerDown = (event: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const meshesToTest = pinMeshes.map((p) => p.mesh);
+      const intersects = raycaster.intersectObjects(meshesToTest);
+
+      if (intersects.length > 0) {
+        const hit = pinMeshes.find((p) => p.mesh === intersects[0].object);
+        if (hit) {
+          setSelectedIncident(hit.inc);
+        }
+      }
+    };
+
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+
     // Resize handler
     const handleResize = () => {
       if (!el) return;
@@ -428,18 +466,49 @@ export const HolographicGlobeTheatre: React.FC = () => {
 
     return () => {
       window.removeEventListener("resize", handleResize);
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       cancelAnimationFrame(animId);
+      controls.dispose();
       renderer.dispose();
       if (el.contains(renderer.domElement)) {
         el.removeChild(renderer.domElement);
       }
     };
+  }, []);
+
+  /* Dynamically update autoRotate state on controls */
+  useEffect(() => {
+    if (controlsRef.current) {
+      controlsRef.current.autoRotate = autoRotate;
+    }
   }, [autoRotate]);
+
+  /* Smoothly re-orient camera when an incident is selected */
+  useEffect(() => {
+    if (!controlsRef.current || !selectedIncident || !cameraRef.current) return;
+    const targetVector = latLonToVector3(selectedIncident.lat, selectedIncident.lon, 28);
+    const camera = cameraRef.current;
+    const startPos = camera.position.clone();
+
+    let step = 0;
+    const flyCamera = () => {
+      step += 0.05;
+      if (step <= 1 && cameraRef.current) {
+        camera.position.lerpVectors(startPos, targetVector, step);
+        controlsRef.current?.update();
+        requestAnimationFrame(flyCamera);
+      }
+    };
+    flyCamera();
+  }, [selectedIncident]);
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#02060d] text-ink select-none font-sans">
       {/* 3D Three.js Container */}
-      <div ref={mountRef} className="absolute inset-0 h-full w-full z-0" />
+      <div
+        ref={mountRef}
+        className="absolute inset-0 h-full w-full z-0 cursor-grab active:cursor-grabbing"
+      />
 
       {/* ── TOP-LEFT: OFFICIAL INCOIS / ICG MILITARY SHIELD (Matching Image 1) ── */}
       <div className="pointer-events-auto absolute top-4 left-4 z-20 flex flex-col gap-1 rounded-2xl border border-teal/40 bg-bg-1/80 p-3.5 shadow-[0_0_30px_rgba(0,240,255,0.18)] backdrop-blur-xl">
