@@ -1,25 +1,3 @@
-<<<<<<< HEAD
-from .attribution import (
-    VESSEL_TYPE_PRIORS,
-    BayesianAttributionEngine,
-    backtrack_proximity_score,
-    compute_attribution_score,
-    kinetic_anomaly_score,
-    temporal_plausibility_score,
-    trajectory_collinearity_score,
-    vessel_profile_prior,
-)
-
-__all__ = [
-    "VESSEL_TYPE_PRIORS",
-    "BayesianAttributionEngine",
-    "backtrack_proximity_score",
-    "compute_attribution_score",
-    "kinetic_anomaly_score",
-    "temporal_plausibility_score",
-    "trajectory_collinearity_score",
-    "vessel_profile_prior",
-=======
 """
 AIS Correlation and Forensic Attribution Package for Sagar-Drishti.
 """
@@ -32,6 +10,7 @@ from core.correlation.attribution import (
     kinetic_anomaly_score,
     temporal_plausibility_score,
     BayesianAttributionEngine,
+    VESSEL_TYPE_PRIORS,
 )
 from core.correlation.traffic_filter import (
     SpatiotemporalTrafficFilter,
@@ -55,6 +34,7 @@ __all__ = [
     "kinetic_anomaly_score",
     "temporal_plausibility_score",
     "BayesianAttributionEngine",
+    "VESSEL_TYPE_PRIORS",
     "SpatiotemporalTrafficFilter",
     "FilterConfig",
     "FilterResult",
@@ -62,5 +42,4 @@ __all__ = [
     "AnomalyProfile",
     "AttributionExplainer",
     "ForensicReport",
->>>>>>> 9b2760a50f3580bb19095db474a776860413101b
 ]

@@ -133,7 +133,7 @@ flowchart TD
 * **Core Modules:** [`core/correlation/attribution.py`](core/correlation/attribution.py), [`core/correlation/traffic_filter.py`](core/correlation/traffic_filter.py), [`core/correlation/anomaly.py`](core/correlation/anomaly.py), [`core/correlation/explainability.py`](core/correlation/explainability.py), [`core/ais/interpolator.py`](core/ais/interpolator.py)
 * **Formulations & Reconciliation:**
   * **Traffic Funnel Filter:** Filters candidates within spatiotemporal cylinder ($R \le 35\text{ km}, |\Delta t| \le 6\text{ h}$) and weeds out anchored/stationary crafts ($\text{SOG} < 0.5\text{ knots}$).
-  * **Dark-Ship Gap Detection:** Identifies intentional AIS silences ($>30\text{ min}$) and performs dead-reckoning with expanding uncertainty bounds.
+  * **Dark-Ship Gap Detection:** Identifies intentional AIS silences ($>1.0\text{ hour}$) and performs dead-reckoning with expanding uncertainty bounds.
   * **Sensor Error & Diffusion Kernel Reconciliation:**
     $$\sigma_{\text{origin}} = \sqrt{\sigma_{\text{init}}^2 + 2 K_{\text{diff}} T_{\text{drift}}} = \sqrt{100^2 + 2(2.5)(8640)} \approx 230.7\text{ m}$$
     $$\sigma_{\text{registration}} = \sqrt{\sigma_{\text{SAR}}^2 (20\text{m}) + \sigma_{\text{AIS}}^2 (15\text{m}) + \sigma_{\text{jitter}}^2 (25\text{m})} \approx 35.4\text{ m}$$

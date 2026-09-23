@@ -189,10 +189,10 @@ class TestAttributionConfidenceEllipse:
         assert score_near > 0.3
 
     def test_kinetic_anomaly_with_blackout_gap(self):
-        # Tanker slowing down with a 42-min AIS blackout
+        # Tanker slowing down with a 72-min AIS blackout (above 1.0-hour threshold)
         score_with_blackout = kinetic_anomaly_score(
             sog_before=14.0, sog_during=4.5,
-            is_night=True, course_jitter=2.0, blackout_gap_minutes=42.0,
+            is_night=True, course_jitter=2.0, blackout_gap_minutes=72.0,
         )
         score_without_blackout = kinetic_anomaly_score(
             sog_before=14.0, sog_during=4.5,

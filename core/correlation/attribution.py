@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from typing import Dict, List
 import numpy as np
 
@@ -67,7 +66,7 @@ def kinetic_anomaly_score(sog_before: float, sog_during: float,
     beta1, beta2 = 0.3, 0.1
     delta_speed = max(0, sog_before - sog_during)  # slowing down
     
-    blackout_boost = 0.5 if blackout_gap_minutes >= 30.0 else 0.0
+    blackout_boost = 0.5 if blackout_gap_minutes >= 60.0 else 0.0
     raw = beta1 * delta_speed + beta2 * course_jitter + blackout_boost
     
     # Sigmoid function
@@ -237,8 +236,6 @@ class BayesianAttributionEngine:
             r["attributionRank"] = i + 1
         
         return results
-=======
-from typing import Dict, List
 import numpy as np
 
 VESSEL_TYPE_PRIORS = {
@@ -254,8 +251,28 @@ VESSEL_TYPE_PRIORS = {
 def backtrack_proximity_score(vessel_lat: float, vessel_lon: float,
                               vessel_time: float,
                               backtrack_lat: float, backtrack_lon: float,
-                              sigma_dist: float = 500.0) -> float:
-    """Exponential proximity score: f1 = exp(-min_dist^2 / (2*sigma^2))"""
+                              sigma_dist: float = 500.0,
+                              ellipse: Dict[str, float] | None = None) -> float:
+    """Exponential proximity score: f1 = exp(-min_dist^2 / (2*sigma^2)).
+    
+    If confidence ellipse parameters (semiMajorAxisMeters, semiMinorAxisMeters, orientationDeg)
+    are provided, computes Mahalanobis distance scaled to the 95% confidence bounds.
+    """
+    if ellipse and "semiMajorAxisMeters" in ellipse and "semiMinorAxisMeters" in ellipse:
+        a = max(float(ellipse["semiMajorAxisMeters"]), 50.0)
+        b = max(float(ellipse["semiMinorAxisMeters"]), 50.0)
+        theta_rad = np.radians(float(ellipse.get("orientationDeg", 0.0)))
+
+        dy = (vessel_lat - backtrack_lat) * 111139.0
+        dx = (vessel_lon - backtrack_lon) * (111139.0 * np.cos(np.radians(backtrack_lat)))
+
+        x_rot = np.cos(theta_rad) * dx + np.sin(theta_rad) * dy
+        y_rot = -np.sin(theta_rad) * dx + np.cos(theta_rad) * dy
+
+        maha_sq = (x_rot / a)**2 + (y_rot / b)**2
+        score = np.exp(-0.5 * maha_sq)
+        return float(np.clip(score, 0.0, 1.0))
+
     dist_meters = np.sqrt((vessel_lat - backtrack_lat)**2 + (vessel_lon - backtrack_lon)**2) * 111319.5
     score = np.exp(-(dist_meters**2) / (2 * sigma_dist**2))
     return float(np.clip(score, 0.0, 1.0))
@@ -275,8 +292,9 @@ def vessel_profile_prior(vessel_type: str) -> float:
     return float(VESSEL_TYPE_PRIORS.get(vessel_type, 0.1))
 
 def kinetic_anomaly_score(sog_before: float, sog_during: float,
-                          is_night: bool, course_jitter: float = 0.0) -> float:
-    """f4 = σ(β1 * ΔSpeed + β2 * CourseJitter) with day/night penalty.
+                          is_night: bool, course_jitter: float = 0.0,
+                          blackout_gap_minutes: float = 0.0) -> float:
+    """f4 = σ(β1 * ΔSpeed + β2 * CourseJitter + β3 * BlackoutGap) with day/night penalty.
     
     β1 = 0.3, β2 = 0.1 per Architecture.md §7.2.
     During night: full anomaly score.
@@ -285,7 +303,8 @@ def kinetic_anomaly_score(sog_before: float, sog_during: float,
     beta1, beta2 = 0.3, 0.1
     delta_speed = max(0, sog_before - sog_during)  # slowing down
     
-    raw = beta1 * delta_speed + beta2 * course_jitter
+    blackout_boost = 0.5 if blackout_gap_minutes >= 60.0 else 0.0
+    raw = beta1 * delta_speed + beta2 * course_jitter + blackout_boost
     
     # Sigmoid function
     score_night = 1.0 / (1.0 + np.exp(-raw))
@@ -505,4 +524,4 @@ class BayesianAttributionEngine:
             r["attributionRank"] = i + 1
         
         return results
->>>>>>> 9b2760a50f3580bb19095db474a776860413101b
+

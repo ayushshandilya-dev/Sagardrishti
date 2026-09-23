@@ -35,7 +35,7 @@ class AISAnomalyDetector:
 
     def __init__(
         self,
-        min_gap_alert_hours: float = 0.75,  # 45 minutes of silence
+        min_gap_alert_hours: float = 1.0,  # 1 hour of silence (sub-hour gaps are satellite occlusion artifacts)
         suspicious_speed_drop_knots: float = 4.0
     ):
         self.min_gap_alert_hours = min_gap_alert_hours

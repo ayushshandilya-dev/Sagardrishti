@@ -148,18 +148,8 @@ db = Database()
 
 def run_migrations() -> None:
     """Apply Alembic migrations (upgrade head) against the configured store."""
-<<<<<<< HEAD
     import logging
     from pathlib import Path
-=======
-    try:
-        from alembic import command
-        from alembic.config import Config
-    except ImportError:
-        logger.warning("Alembic not installed. Falling back to db.create_all() for local development.")
-        db.create_all()
-        return
->>>>>>> 9b2760a50f3580bb19095db474a776860413101b
 
     logger = logging.getLogger("sagar.db")
 
@@ -167,7 +157,7 @@ def run_migrations() -> None:
         from alembic import command
         from alembic.config import Config
     except ImportError:
-        logger.warning("Alembic not installed; falling back to db.create_all()")
+        logger.warning("Alembic not installed. Falling back to db.create_all() for local development.")
         db.create_all()
         return
 
