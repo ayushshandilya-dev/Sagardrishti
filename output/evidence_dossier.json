@@ -1,47 +1,47 @@
 {
   "event_id": "SD-2026-00421",
-  "merkle_root": "4e91039ea0b16bdfa438640f1cc9e7d1d7e27f1888c12f843c9fa46deae5a6d6",
-  "signature_ed25519": "dd75da89b53d3664bd19145f490fee9ae42028b284d5b4354ff0d1d3bc9081f337642c2e45408cc06df6ab799434b7751f056774377a8c077976420702a10d07",
+  "merkle_root": "283104e0b0f9fad769c780e370b8394ab2efd14b5c9fc45a87ed202e599f932c",
+  "signature_ed25519": "76c83f6e07d0737a070c1166a5b154127242192df6ebf33a8260b391823e11c08c49dabe3c9458a8e3e6cab33ebd32ae747a2c423ba6f1149dfe930b1c28870d",
   "chain_valid": true,
   "blocks": [
     {
       "index": 1,
-      "timestamp": "2026-09-23T09:00:29.635847+00:00",
+      "timestamp": "2026-09-23T13:38:08.329047+00:00",
       "merkle_root": "2b70a5d9429f1d791a48f86861d3343fec03d4aa481716e993e2a11d8b2d16d1",
       "attribution_matrix": {
         "sarCalibrationVerified": 1.0,
         "speckleLeeFilterApplied": 1.0
       },
-      "prev_block_hash": "00711798bdd2cf43303d15213ef0d436291e44cc5f39334b40c5781af2d5b3f5",
-      "block_hash": "004f00d79b7485ac51c1b5a459f88ee9cd7ed27d01b87b354305338d967aff5b",
-      "nonce": 128
+      "prev_block_hash": "b0d19af362e2a809b84f6b5d2e11201ca89b06040cf21d6d3f7665b7b66d935a",
+      "block_hash": "b5c6d9bd2a96d947b0f299269889ef0612a3da5eec2e7d10d3c32787efd72320",
+      "nonce": 0
     },
     {
       "index": 2,
-      "timestamp": "2026-09-23T09:00:29.639536+00:00",
-      "merkle_root": "d99ddb46799c20c755ffc3f5dd76f84fef77381f348e563befdfbf3d4a36743e",
+      "timestamp": "2026-09-23T13:38:08.330532+00:00",
+      "merkle_root": "97224faed4806db32b748745022d96c086a409bf107ec305b25cad9e9c596105",
       "attribution_matrix": {
         "aisDeduplicated": 1.0
       },
-      "prev_block_hash": "004f00d79b7485ac51c1b5a459f88ee9cd7ed27d01b87b354305338d967aff5b",
-      "block_hash": "00e45ae7b8aba4e9080dde6b132e326c8baf37c69da76a5f18e3265797864eea",
-      "nonce": 354
+      "prev_block_hash": "b5c6d9bd2a96d947b0f299269889ef0612a3da5eec2e7d10d3c32787efd72320",
+      "block_hash": "3117eacda7bcba55c0ad9dd0151524bfce60a3e407935d48105b3dabad082f90",
+      "nonce": 0
     },
     {
       "index": 3,
-      "timestamp": "2026-09-23T09:00:29.650446+00:00",
+      "timestamp": "2026-09-23T13:38:08.332112+00:00",
       "merkle_root": "ad15c9f4d0119bb473bb6ce4925f1b292545a6231bff19b83944fcc99a947a01",
       "attribution_matrix": {
         "incoisCurrentsValidated": 1.0,
         "ecmwfWindsInterpolated": 1.0
       },
-      "prev_block_hash": "00e45ae7b8aba4e9080dde6b132e326c8baf37c69da76a5f18e3265797864eea",
-      "block_hash": "00ce8953f7a358abd7b885c40aa281f0155b02a0b62face475274e4befebaaa9",
-      "nonce": 179
+      "prev_block_hash": "3117eacda7bcba55c0ad9dd0151524bfce60a3e407935d48105b3dabad082f90",
+      "block_hash": "81b3d7b6628b2f35ebfbc8fe768ccf710d3b0c6f3ca23aac77a15db7bbd1cfef",
+      "nonce": 0
     },
     {
       "index": 4,
-      "timestamp": "2026-09-23T09:00:29.654359+00:00",
+      "timestamp": "2026-09-23T13:38:08.334263+00:00",
       "merkle_root": "f07bbd4b43db98dffdc7d1519004e545796c91ae6dff6b994abc9f4dfdc34495",
       "attribution_matrix": {
         "backtrackProximityScore": 0.962,
@@ -50,9 +50,9 @@
         "kineticAnomalyScore": 0.885,
         "temporalPlausibilityScore": 1.0
       },
-      "prev_block_hash": "00ce8953f7a358abd7b885c40aa281f0155b02a0b62face475274e4befebaaa9",
-      "block_hash": "00828f2c42ea18dc9da9f4a608e05a04c9e2d4598eae03d2fe4ed6e2c3090af5",
-      "nonce": 7
+      "prev_block_hash": "81b3d7b6628b2f35ebfbc8fe768ccf710d3b0c6f3ca23aac77a15db7bbd1cfef",
+      "block_hash": "40aba487f101cee39c42c6c1fbc638cc9df4e752a00f4627140381b7d0539380",
+      "nonce": 0
     }
   ],
   "attribution": {
@@ -71,7 +71,7 @@
           "is_night_discharge": true,
           "composite_anomaly_score": 0.984,
           "anomaly_flags": [
-            "AIS_TRANSPONDER_SILENCE (1.8h gap)",
+            "AIS_TRANSPONDER_SILENCE (1.8h gap inside discharge window)",
             "SIGNIFICANT_SPEED_DROP (14.2kt -> 4.7kt)",
             "NIGHTTIME_DISCHARGE_WINDOW"
           ]
@@ -80,32 +80,35 @@
           "vessel_name": "MT OCEAN PIONEER",
           "mmsi": 419001234,
           "imo": 9345678,
-          "overall_confidence": 0.992,
+          "overall_confidence": 0.932,
           "verdict": "PRIMA_FACIE_CULPRIT",
           "primary_culprit": true,
           "factor_percentages": {
-            "Spatial Proximity (35%)": 35.0,
+            "Spatial Proximity (35%)": 29.0,
             "Trajectory Alignment (25%)": 25.0,
             "Vessel Type Risk (15%)": 15.0,
             "Kinematic Anomaly (15%)": 14.2,
             "Temporal Plausibility (10%)": 10.0
           },
-          "legal_narrative": "Vessel 'MT OCEAN PIONEER' (IMO 9345678, MMSI 419001234, Type: OIL_TANKER) has been identified as the PRIMA FACIE CULPRIT with a forensic attribution confidence of 99.2%. Spatial-temporal reverse Lagrangian backtracking places the vessel within 0 meters of the reconstructed oil discharge origin point at the estimated release window. The vessel's navigational trajectory demonstrates 100.0% directional alignment with the major skeleton axis of the detected mineral oil slick. Behavioral forensic telemetry flags: [AIS_TRANSPONDER_SILENCE (1.8h gap), SIGNIFICANT_SPEED_DROP (14.2kt -> 4.7kt), NIGHTTIME_DISCHARGE_WINDOW].",
-          "court_admissibility_summary": "Pursuant to Indian Evidence Act Section 65B and MARPOL 73/78 Annex I, the spatio-temporal correlation index (0.992) establishes a clear chain of custody linking Vessel MT OCEAN PIONEER to the illicit discharge, supported by independent SAR satellite backscatter damping and forensic AIS kinematics."
+          "legal_narrative": "Vessel 'MT OCEAN PIONEER' (IMO 9345678, MMSI 419001234, Type: OIL_TANKER) has been identified as the PRIMA FACIE CULPRIT with a forensic attribution confidence of 93.2%. Spatial-temporal reverse Lagrangian backtracking places the vessel within 143 meters of the reconstructed oil discharge origin point at the estimated release window. The vessel's navigational trajectory demonstrates 100.0% directional alignment with the major skeleton axis of the detected mineral oil slick. Behavioral forensic telemetry flags: [AIS_TRANSPONDER_SILENCE (1.8h gap inside discharge window), SIGNIFICANT_SPEED_DROP (14.2kt -> 4.7kt), NIGHTTIME_DISCHARGE_WINDOW].",
+          "court_admissibility_summary": "Pursuant to Indian Evidence Act Section 65B and MARPOL 73/78 Annex I, the spatio-temporal correlation index (0.932) establishes a clear chain of custody linking Vessel MT OCEAN PIONEER to the illicit discharge, supported by independent SAR satellite backscatter damping and forensic AIS kinematics."
         },
-        "attributionScore": 0.992,
+        "attributionScore": 0.932,
         "factorBreakdown": {
-          "backtrackProximityScore": 1.0,
+          "backtrackProximityScore": 0.83,
           "trajectoryCollinearityScore": 1.0,
           "vesselPriorScore": 1.0,
           "kineticAnomalyScore": 0.945,
           "temporalPlausibilityScore": 1.0
         },
         "attributionRank": 1,
-        "closestApproachMeters": 0.0
+        "closestApproachMeters": 142.6,
+        "dirichletPosteriorProbability": 0.7611,
+        "dirichletPriorConcentration": 2.5,
+        "dirichletPosteriorConcentration": 9.868
       },
       {
-        "vesselName": "INS KATTABOMMAN",
+        "vesselName": "MV COASTAL DEFENDER-IV",
         "mmsi": 440123456,
         "imo": 9876543,
         "anomalyProfile": {
@@ -120,7 +123,7 @@
           ]
         },
         "forensicReport": {
-          "vessel_name": "INS KATTABOMMAN",
+          "vessel_name": "MV COASTAL DEFENDER-IV",
           "mmsi": 440123456,
           "imo": 9876543,
           "overall_confidence": 0.303,
@@ -133,8 +136,8 @@
             "Kinematic Anomaly (15%)": 7.5,
             "Temporal Plausibility (10%)": 0.0
           },
-          "legal_narrative": "Vessel 'INS KATTABOMMAN' (IMO 9876543, MMSI 440123456, Type: FRIGATE) has been identified as the EXONERATED BACKGROUND TRAFFIC with a forensic attribution confidence of 30.3%. Spatial-temporal reverse Lagrangian backtracking places the vessel within 13546 meters of the reconstructed oil discharge origin point at the estimated release window. The vessel's navigational trajectory demonstrates 85.3% directional alignment with the major skeleton axis of the detected mineral oil slick. Behavioral forensic telemetry flags: [NIGHTTIME_DISCHARGE_WINDOW].",
-          "court_admissibility_summary": "Pursuant to Indian Evidence Act Section 65B and MARPOL 73/78 Annex I, the spatio-temporal correlation index (0.303) establishes a clear chain of custody linking Vessel INS KATTABOMMAN to the illicit discharge, supported by independent SAR satellite backscatter damping and forensic AIS kinematics."
+          "legal_narrative": "Vessel 'MV COASTAL DEFENDER-IV' (IMO 9876543, MMSI 440123456, Type: TUG_ESCORT) has been identified as the EXONERATED BACKGROUND TRAFFIC with a forensic attribution confidence of 30.3%. Spatial-temporal reverse Lagrangian backtracking places the vessel within 13546 meters of the reconstructed oil discharge origin point at the estimated release window. The vessel's navigational trajectory demonstrates 85.3% directional alignment with the major skeleton axis of the detected mineral oil slick. Behavioral forensic telemetry flags: [NIGHTTIME_DISCHARGE_WINDOW].",
+          "court_admissibility_summary": "Pursuant to Indian Evidence Act Section 65B and MARPOL 73/78 Annex I, the spatio-temporal correlation index (0.303) establishes a clear chain of custody linking Vessel MV COASTAL DEFENDER-IV to the illicit discharge, supported by independent SAR satellite backscatter damping and forensic AIS kinematics."
         },
         "attributionScore": 0.303,
         "factorBreakdown": {
@@ -145,9 +148,12 @@
           "temporalPlausibilityScore": 0.0
         },
         "attributionRank": 1,
-        "closestApproachMeters": 13545.7
+        "closestApproachMeters": 13545.7,
+        "dirichletPosteriorProbability": 0.2389,
+        "dirichletPriorConcentration": 0.25,
+        "dirichletPosteriorConcentration": 3.097
       }
     ]
   },
-  "generated_at": "2026-09-23T09:00:29.696265+00:00"
+  "generated_at": "2026-09-23T13:38:08.381907+00:00"
 }

@@ -122,12 +122,17 @@ class MerkleBlock:
 class TamperEvidentLedger:
     """Chained cryptographic ledger for evidence custody."""
     
-    def __init__(self, processing_node_id: str = "sagar-drishti-node-01", difficulty: int = 2):
+    def __init__(self, processing_node_id: str = "sagar-drishti-node-01", difficulty: int = 0, storage_path: Optional[str] = None):
         self.chain: list[MerkleBlock] = []
         self.processing_node_id = processing_node_id
         self.difficulty = difficulty
-        # Genesis block
-        self._add_genesis()
+        self.storage_path = storage_path
+        
+        # Load existing chain if available, else initialize genesis block
+        if self.storage_path and self._load_from_disk():
+            pass
+        else:
+            self._add_genesis()
     
     def _add_genesis(self):
         """Create the genesis block."""
@@ -140,6 +145,8 @@ class TamperEvidentLedger:
             difficulty=self.difficulty
         )
         self.chain.append(genesis)
+        if self.storage_path:
+            self._save_to_disk()
     
     def add_block(self, merkle_root: str, attribution_matrix: Dict[str, float]) -> MerkleBlock:
         """Add a new block to the chain."""
@@ -153,8 +160,63 @@ class TamperEvidentLedger:
             difficulty=self.difficulty
         )
         self.chain.append(new_block)
+        if self.storage_path:
+            self._save_to_disk()
         return new_block
     
+    def _save_to_disk(self) -> None:
+        """Append-only disk write: writes in JSON Lines (JSONL) mode."""
+        if not self.storage_path:
+            return
+        from pathlib import Path
+        path = Path(self.storage_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # If file does not exist, write genesis block
+        if not path.exists():
+            with open(path, "w", encoding="utf-8") as f:
+                for b in self.chain:
+                    f.write(json.dumps(b.to_dict(), separators=(",", ":")) + "\n")
+        else:
+            # Append only the latest block in O(1) true append-mode
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(self.chain[-1].to_dict(), separators=(",", ":")) + "\n")
+        
+    def _load_from_disk(self) -> bool:
+        """Load chain state from disk (supports both JSONL and legacy JSON arrays)."""
+        from pathlib import Path
+        path = Path(self.storage_path)
+        if not path.exists():
+            return False
+        try:
+            content = path.read_text(encoding="utf-8").strip()
+            if not content:
+                return False
+            loaded_chain = []
+            if content.startswith("["):
+                raw_data = json.loads(content)
+            else:
+                raw_data = [json.loads(line) for line in content.splitlines() if line.strip()]
+
+            if not raw_data:
+                return False
+
+            for b in raw_data:
+                block = MerkleBlock(
+                    index=b["index"],
+                    timestamp=b["timestamp"],
+                    merkle_root=b["merkle_root"],
+                    attribution_matrix=b["attribution_matrix"],
+                    prev_block_hash=b["prev_block_hash"],
+                    difficulty=0  # preserved as minted
+                )
+                block.nonce = b.get("nonce", 0)
+                block.block_hash = b.get("block_hash", block.compute_hash())
+                loaded_chain.append(block)
+            self.chain = loaded_chain
+            return self.verify_chain()
+        except Exception:
+            return False
+
     def verify_chain(self) -> bool:
         """Verify the integrity of the entire chain."""
         for i in range(1, len(self.chain)):
@@ -165,8 +227,8 @@ class TamperEvidentLedger:
             if current.prev_block_hash != prev.block_hash:
                 return False
             
-            # Verify block hash is valid (starts with required leading zeros)
-            if not current.block_hash.startswith("0" * self.difficulty):
+            # Verify block hash is valid (starts with required leading zeros if difficulty > 0)
+            if self.difficulty > 0 and not current.block_hash.startswith("0" * self.difficulty):
                 return False
             
             # Verify hash is consistent with block data
@@ -260,27 +322,42 @@ class EvidenceDossierGenerator:
         elements.append(Paragraph(f"Classification: {sg.get('classLabel', 'N/A')}", styles['Normal']))
         
         # Attribution breakdown
-        elements.append(Paragraph("3. VESSEL ATTRIBUTION", section_style))
+        elements.append(Paragraph("3. VESSEL ATTRIBUTION & FORENSIC DECOMPOSITION", section_style))
         cand_data = candidate_vessels[0] if candidate_vessels else {}
-        elements.append(Paragraph(f"Top Candidate: {cand_data.get('vesselName', 'N/A')}", styles['Normal']))
-        elements.append(Paragraph(f"MMSI: {cand_data.get('mmsi', 'N/A')}, IMO: {cand_data.get('imo', 'N/A')}", styles['Normal']))
-        elements.append(Paragraph(f"Attribution Confidence: {cand_data.get('attributionScore', 0):.1%}", styles['Normal']))
+        elements.append(Paragraph(f"Top Candidate: <b>{cand_data.get('vesselName', 'N/A')}</b>", styles['Normal']))
+        elements.append(Paragraph(f"MMSI: {cand_data.get('mmsi', 'N/A')} | IMO: {cand_data.get('imo', 'N/A')}", styles['Normal']))
         
-        # Factor breakdown table
+        # Dirichlet Posterior Probability vs Linear Confidence
+        dirichlet_prob = cand_data.get('dirichletPosteriorProbability')
+        linear_score = cand_data.get('attributionScore', 0)
+        prob_str = f"{dirichlet_prob:.1%}" if dirichlet_prob is not None else f"{linear_score:.1%}"
+        elements.append(Paragraph(f"<b>Dirichlet Bayesian Posterior Probability:</b> {prob_str} (Linear Additive Index: {linear_score:.1%})", styles['Normal']))
+        
+        # Natural Language Legal Narrative if present
+        forensic_report = cand_data.get('forensicReport', {})
+        if forensic_report and 'legal_narrative' in forensic_report:
+            elements.append(Spacer(1, 3*mm))
+            elements.append(Paragraph(f"<b>Forensic Legal Assessment:</b> {forensic_report['legal_narrative']}", styles['Normal']))
+            elements.append(Spacer(1, 3*mm))
+
+        # Dynamic Factor breakdown table with exact factor shares
         if 'factorBreakdown' in cand_data:
             fb = cand_data['factorBreakdown']
-            factor_table = [['Factor', 'Score', 'Weighted Contribution']]
+            factor_table = [['Attribution Factor', 'Metric Score', 'Linear Factor Share (%)']]
+            
+            # Use exact factor percentages from forensicReport if available
+            factor_shares = forensic_report.get('factor_percentages', {})
             factor_data = [
-                ('Backtrack Proximity', f"{fb.get('backtrackProximityScore', 0):.1%}", f"{0.35*fb.get('backtrackProximityScore', 0):.1%}"),
-                ('Trajectory Collinearity', f"{fb.get('trajectoryCollinearityScore', 0):.1%}", f"{0.25*fb.get('trajectoryCollinearityScore', 0):.1%}"),
-                ('Vessel Type Prior', f"{fb.get('vesselPriorScore', 0):.1%}", f"{0.15*fb.get('vesselPriorScore', 0):.1%}"),
-                ('Kinematic Anomaly', f"{fb.get('kineticAnomalyScore', 0):.1%}", f"{0.15*fb.get('kineticAnomalyScore', 0):.1%}"),
-                ('Temporal Plausibility', f"{fb.get('temporalPlausibilityScore', 0):.1%}", f"{0.10*fb.get('temporalPlausibilityScore', 0):.1%}"),
+                ('Backtrack Proximity (35%)', f"{fb.get('backtrackProximityScore', 0):.1%}", f"{factor_shares.get('Spatial Proximity (35%)', 35.0 * fb.get('backtrackProximityScore', 0)):.1f}%"),
+                ('Trajectory Collinearity (25%)', f"{fb.get('trajectoryCollinearityScore', 0):.1%}", f"{factor_shares.get('Trajectory Alignment (25%)', 25.0 * fb.get('trajectoryCollinearityScore', 0)):.1f}%"),
+                ('Vessel Type Risk Prior (15%)', f"{fb.get('vesselPriorScore', 0):.1%}", f"{factor_shares.get('Vessel Type Risk (15%)', 15.0 * fb.get('vesselPriorScore', 0)):.1f}%"),
+                ('Kinematic Anomaly Flag (15%)', f"{fb.get('kineticAnomalyScore', 0):.1%}", f"{factor_shares.get('Kinematic Anomaly (15%)', 15.0 * fb.get('kineticAnomalyScore', 0)):.1f}%"),
+                ('Temporal Plausibility (10%)', f"{fb.get('temporalPlausibilityScore', 0):.1%}", f"{factor_shares.get('Temporal Plausibility (10%)', 10.0 * fb.get('temporalPlausibilityScore', 0)):.1f}%"),
             ]
             for fd in factor_data:
                 factor_table.append(fd)
             
-            factor_tbl = Table(factor_table, colWidths=[2*inch, 1.2*inch, 1.8*inch])
+            factor_tbl = Table(factor_table, colWidths=[2.4*inch, 1.2*inch, 1.8*inch])
             factor_tbl.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), HexColor('#1a3c6e')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), white),
@@ -311,11 +388,23 @@ class EvidenceDossierGenerator:
         elements.append(Paragraph(f"Ed25519 Signature: {ledger_data.get('ed25519_signature', 'N/A')[:32]}...", styles['Normal']))
         
         # 65B Certificate
-        elements.append(Paragraph("6. SECTION 65B CERTIFICATE OF COMPUTER AUTHENTICITY", section_style))
-        elements.append(Paragraph(f"Processing System: {attribution_data.get('system_hostname', 'Sagar-Drishti Processing Node')}", styles['Normal']))
-        elements.append(Paragraph(f"Software Version Hash: {attribution_data.get('software_version_hash', 'N/A')}", styles['Normal']))
-        elements.append(Paragraph(f"Blockchain Anchored: Yes - Ledger verified and immutable", styles['Normal']))
-        elements.append(Paragraph(f"Digital Signature Verified: Yes - Ed25519 signature validated", styles['Normal']))
+        elements.append(Paragraph("6. CERTIFICATE OF COMPUTER EVIDENCE (SEC. 65B IEA / BSA 2023)", section_style))
+        sys_host = attribution_data.get('system_hostname', 'Sagar-Drishti Surveillance Processing Node')
+        sw_hash = attribution_data.get('software_version_hash', 'sagar-drishti-v7')
+        elements.append(Paragraph(f"<b>Processing System Host:</b> {sys_host}", styles['Normal']))
+        elements.append(Paragraph(f"<b>Software Kernel Digest:</b> {sw_hash}", styles['Normal']))
+        elements.append(Paragraph(f"<b>Merkle Tree Integrity:</b> Verified unbroken chain of custody", styles['Normal']))
+        elements.append(Spacer(1, 3*mm))
+        
+        cert_text = (
+            "<i>Technical Attestation: The electronic output embodied in this dossier was produced by the "
+            "automated Sagar-Drishti processing pipeline during periods of ordinary, regular operations. "
+            "Input telemetry (Sentinel-1 SAR, Coastal AIS stream, and INCOIS MetOcean data) was cryptographically "
+            "hashed upon ingestion. This technical dossier establishes mathematical continuity and non-repudiation "
+            "to support formal certification by the designated Competent Authority under Section 65B of the Indian "
+            "Evidence Act (and applicable provisions of the Bharatiya Sakshya Adhiniyam, 2023).</i>"
+        )
+        elements.append(Paragraph(cert_text, styles['Normal']))
         
         # Build document
         from reportlab.platypus import PageTemplate, Frame

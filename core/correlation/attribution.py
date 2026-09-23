@@ -91,10 +91,13 @@ def temporal_plausibility_score(vessel_arrival_time: float, discharge_time: floa
     return 0.0
 
 def compute_attribution_score(mmsi_data: Dict, backtrack_coords: Dict,
-                              vessel_profile: str, sar_time: float) -> Dict:
+                              vessel_profile: str, sar_time: float,
+                              sigma_dist: float = 500.0) -> Dict:
     """
     Compute full multi-factor attribution score S_attribution = sum(w_k * f_k)
     Weights: w1=0.35, w2=0.25, w3=0.15, w4=0.15, w5=0.10
+    sigma_dist: Gaussian spatial uncertainty kernel width (meters), defaults to 500m
+                or can be dynamically coupled to the drift model's sigma_r.
     """
     # Extract vessel data
     vessel_lat = mmsi_data["latitude"]
@@ -112,9 +115,10 @@ def compute_attribution_score(mmsi_data: Dict, backtrack_coords: Dict,
     backtrack_lat = backtrack_coords["latitude"]
     backtrack_lon = backtrack_coords["longitude"]
     
-    # 1. Backtrack Proximity
+    # 1. Backtrack Proximity (scales with sigma_dist)
     f1 = backtrack_proximity_score(vessel_lat, vessel_lon, vessel_time,
-                                   backtrack_lat, backtrack_lon)
+                                   backtrack_lat, backtrack_lon,
+                                   sigma_dist=sigma_dist)
     
     # 2. Trajectory Collinearity
     f2 = trajectory_collinearity_score(cog, heading, mmsi_data.get("slick_skeleton", 0.0))

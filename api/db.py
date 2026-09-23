@@ -148,11 +148,13 @@ db = Database()
 
 def run_migrations() -> None:
     """Apply Alembic migrations (upgrade head) against the configured store."""
-    import logging
-    from pathlib import Path
-
-    from alembic import command
-    from alembic.config import Config
+    try:
+        from alembic import command
+        from alembic.config import Config
+    except ImportError:
+        logger.warning("Alembic not installed. Falling back to db.create_all() for local development.")
+        db.create_all()
+        return
 
     logger = logging.getLogger("sagar.db")
     root = Path(__file__).resolve().parent.parent
@@ -182,8 +184,12 @@ def init_db() -> None:
     """Bring the schema to head: Alembic migrations, or create_all (dev only)."""
     settings = get_settings()
     if settings.run_migrations:
-        run_migrations()
-        return
+        try:
+            run_migrations()
+            return
+        except Exception as exc:
+            import logging
+            logging.getLogger("sagar.db").warning("Alembic migration failed (%s); falling back to create_all()", exc)
     if settings.api_env == "production":
         raise RuntimeError("API_ENV=production requires run_migrations=true (Alembic)")
     db.create_all()

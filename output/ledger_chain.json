@@ -1,0 +1,79 @@
+[
+  {
+    "index": 0,
+    "timestamp": "2026-09-23T13:14:48.038677+00:00",
+    "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
+    "attribution_matrix": {},
+    "prev_block_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "block_hash": "40aa98b7b5209e91bc6446e15189833630aaf01b42461996496dbb474c1beb01",
+    "nonce": 0
+  },
+  {
+    "index": 1,
+    "timestamp": "2026-09-23T13:14:48.040610+00:00",
+    "merkle_root": "2b70a5d9429f1d791a48f86861d3343fec03d4aa481716e993e2a11d8b2d16d1",
+    "attribution_matrix": {
+      "sarCalibrationVerified": 1.0,
+      "speckleLeeFilterApplied": 1.0
+    },
+    "prev_block_hash": "40aa98b7b5209e91bc6446e15189833630aaf01b42461996496dbb474c1beb01",
+    "block_hash": "0cc67d6029cb9c72df7ea5838f7eda216d59dd9766c7c69a76b3618e528eae7c",
+    "nonce": 0
+  },
+  {
+    "index": 2,
+    "timestamp": "2026-09-23T13:14:48.042295+00:00",
+    "merkle_root": "d99ddb46799c20c755ffc3f5dd76f84fef77381f348e563befdfbf3d4a36743e",
+    "attribution_matrix": {
+      "aisDeduplicated": 1.0
+    },
+    "prev_block_hash": "0cc67d6029cb9c72df7ea5838f7eda216d59dd9766c7c69a76b3618e528eae7c",
+    "block_hash": "a50bed1b291ad4a84e609f06193f5c038bf99ef432bbe97167db30e065b4ee8f",
+    "nonce": 0
+  },
+  {
+    "index": 3,
+    "timestamp": "2026-09-23T13:14:48.043945+00:00",
+    "merkle_root": "ad15c9f4d0119bb473bb6ce4925f1b292545a6231bff19b83944fcc99a947a01",
+    "attribution_matrix": {
+      "incoisCurrentsValidated": 1.0,
+      "ecmwfWindsInterpolated": 1.0
+    },
+    "prev_block_hash": "a50bed1b291ad4a84e609f06193f5c038bf99ef432bbe97167db30e065b4ee8f",
+    "block_hash": "18e37f1460d940c613fd7f45155df6c26253bf5ac674d661228b84a50b4f0df5",
+    "nonce": 0
+  },
+  {
+    "index": 4,
+    "timestamp": "2026-09-23T13:14:48.045563+00:00",
+    "merkle_root": "f07bbd4b43db98dffdc7d1519004e545796c91ae6dff6b994abc9f4dfdc34495",
+    "attribution_matrix": {
+      "backtrackProximityScore": 0.962,
+      "trajectoryCollinearityScore": 0.918,
+      "vesselPriorScore": 1.0,
+      "kineticAnomalyScore": 0.885,
+      "temporalPlausibilityScore": 1.0
+    },
+    "prev_block_hash": "18e37f1460d940c613fd7f45155df6c26253bf5ac674d661228b84a50b4f0df5",
+    "block_hash": "097a54aaa37432810416d6b03d2ed7528ed7b6f21f2bceb0ba13e1a229fcc9c3",
+    "nonce": 0
+  }
+]{"index":5,"timestamp":"2026-09-23T13:22:39.160670+00:00","merkle_root":"2b70a5d9429f1d791a48f86861d3343fec03d4aa481716e993e2a11d8b2d16d1","attribution_matrix":{"sarCalibrationVerified":1.0,"speckleLeeFilterApplied":1.0},"prev_block_hash":"097a54aaa37432810416d6b03d2ed7528ed7b6f21f2bceb0ba13e1a229fcc9c3","block_hash":"0f125cfcf3c68672a54167a86e63b1fd4af66b01ff283df5e51670b0a9158ef8","nonce":0}
+{"index":6,"timestamp":"2026-09-23T13:22:39.164563+00:00","merkle_root":"97224faed4806db32b748745022d96c086a409bf107ec305b25cad9e9c596105","attribution_matrix":{"aisDeduplicated":1.0},"prev_block_hash":"0f125cfcf3c68672a54167a86e63b1fd4af66b01ff283df5e51670b0a9158ef8","block_hash":"d1c3741d0e33ed8f464ecffc08f7bf0aeac42493912555b3280774c0c510f5cc","nonce":0}
+{"index":7,"timestamp":"2026-09-23T13:22:39.166023+00:00","merkle_root":"ad15c9f4d0119bb473bb6ce4925f1b292545a6231bff19b83944fcc99a947a01","attribution_matrix":{"incoisCurrentsValidated":1.0,"ecmwfWindsInterpolated":1.0},"prev_block_hash":"d1c3741d0e33ed8f464ecffc08f7bf0aeac42493912555b3280774c0c510f5cc","block_hash":"a5966482cffa2f4d0effb68667b062c6fa759c011e57eb2b738210c5470901c7","nonce":0}
+{"index":8,"timestamp":"2026-09-23T13:22:39.167435+00:00","merkle_root":"f07bbd4b43db98dffdc7d1519004e545796c91ae6dff6b994abc9f4dfdc34495","attribution_matrix":{"backtrackProximityScore":0.962,"trajectoryCollinearityScore":0.918,"vesselPriorScore":1.0,"kineticAnomalyScore":0.885,"temporalPlausibilityScore":1.0},"prev_block_hash":"a5966482cffa2f4d0effb68667b062c6fa759c011e57eb2b738210c5470901c7","block_hash":"00c19d054046a77a3476d08cad8345925ab7631b2ac715b0889b2e6a2fde8d0d","nonce":0}
+{"index":0,"timestamp":"2026-09-23T13:26:44.960167+00:00","merkle_root":"0000000000000000000000000000000000000000000000000000000000000000","attribution_matrix":{},"prev_block_hash":"0000000000000000000000000000000000000000000000000000000000000000","block_hash":"dc98cad6f7a28a42e828bd847e537435a0f672462c550371415c9e1da0be8f92","nonce":0}
+{"index":1,"timestamp":"2026-09-23T13:26:44.961410+00:00","merkle_root":"2b70a5d9429f1d791a48f86861d3343fec03d4aa481716e993e2a11d8b2d16d1","attribution_matrix":{"sarCalibrationVerified":1.0,"speckleLeeFilterApplied":1.0},"prev_block_hash":"dc98cad6f7a28a42e828bd847e537435a0f672462c550371415c9e1da0be8f92","block_hash":"1ef1057c8a0959f0bedd63ff4d62549022e1b3ed8730aa6da3545afee40a012f","nonce":0}
+{"index":2,"timestamp":"2026-09-23T13:26:44.962524+00:00","merkle_root":"97224faed4806db32b748745022d96c086a409bf107ec305b25cad9e9c596105","attribution_matrix":{"aisDeduplicated":1.0},"prev_block_hash":"1ef1057c8a0959f0bedd63ff4d62549022e1b3ed8730aa6da3545afee40a012f","block_hash":"75a3402e62138b2404308913c695af320550659b326c69222e3344e78f97a5bb","nonce":0}
+{"index":3,"timestamp":"2026-09-23T13:26:44.964008+00:00","merkle_root":"ad15c9f4d0119bb473bb6ce4925f1b292545a6231bff19b83944fcc99a947a01","attribution_matrix":{"incoisCurrentsValidated":1.0,"ecmwfWindsInterpolated":1.0},"prev_block_hash":"75a3402e62138b2404308913c695af320550659b326c69222e3344e78f97a5bb","block_hash":"a42a395da4decd3aa4712d2bda56cac1e8e528b12dc54acc8f427e7c9b3620de","nonce":0}
+{"index":4,"timestamp":"2026-09-23T13:26:44.965347+00:00","merkle_root":"f07bbd4b43db98dffdc7d1519004e545796c91ae6dff6b994abc9f4dfdc34495","attribution_matrix":{"backtrackProximityScore":0.962,"trajectoryCollinearityScore":0.918,"vesselPriorScore":1.0,"kineticAnomalyScore":0.885,"temporalPlausibilityScore":1.0},"prev_block_hash":"a42a395da4decd3aa4712d2bda56cac1e8e528b12dc54acc8f427e7c9b3620de","block_hash":"a74a6434e7d5c17f992784b3edfbd11f9658b5fc8c5cb8f0af04f8509100459a","nonce":0}
+{"index":0,"timestamp":"2026-09-23T13:35:00.371590+00:00","merkle_root":"0000000000000000000000000000000000000000000000000000000000000000","attribution_matrix":{},"prev_block_hash":"0000000000000000000000000000000000000000000000000000000000000000","block_hash":"564e2ef8f738f5193ea1adbe794bcab9ec3d7420b7ac408ad99cec549a43471f","nonce":0}
+{"index":1,"timestamp":"2026-09-23T13:35:00.372758+00:00","merkle_root":"2b70a5d9429f1d791a48f86861d3343fec03d4aa481716e993e2a11d8b2d16d1","attribution_matrix":{"sarCalibrationVerified":1.0,"speckleLeeFilterApplied":1.0},"prev_block_hash":"564e2ef8f738f5193ea1adbe794bcab9ec3d7420b7ac408ad99cec549a43471f","block_hash":"9025cb61d64159ca3a51ddf94e00a4708400bbd1098b0a885e7789ea146a2fc0","nonce":0}
+{"index":2,"timestamp":"2026-09-23T13:35:00.373804+00:00","merkle_root":"97224faed4806db32b748745022d96c086a409bf107ec305b25cad9e9c596105","attribution_matrix":{"aisDeduplicated":1.0},"prev_block_hash":"9025cb61d64159ca3a51ddf94e00a4708400bbd1098b0a885e7789ea146a2fc0","block_hash":"dbc81ef37848dcb265b66f19e408c1ff549cf41571cea05b5ea927023f0421a8","nonce":0}
+{"index":3,"timestamp":"2026-09-23T13:35:00.375049+00:00","merkle_root":"ad15c9f4d0119bb473bb6ce4925f1b292545a6231bff19b83944fcc99a947a01","attribution_matrix":{"incoisCurrentsValidated":1.0,"ecmwfWindsInterpolated":1.0},"prev_block_hash":"dbc81ef37848dcb265b66f19e408c1ff549cf41571cea05b5ea927023f0421a8","block_hash":"b566e14cd04f7cfa401f21c690d48147de75183dcb3028a05530e3355f50d339","nonce":0}
+{"index":4,"timestamp":"2026-09-23T13:35:00.376984+00:00","merkle_root":"f07bbd4b43db98dffdc7d1519004e545796c91ae6dff6b994abc9f4dfdc34495","attribution_matrix":{"backtrackProximityScore":0.962,"trajectoryCollinearityScore":0.918,"vesselPriorScore":1.0,"kineticAnomalyScore":0.885,"temporalPlausibilityScore":1.0},"prev_block_hash":"b566e14cd04f7cfa401f21c690d48147de75183dcb3028a05530e3355f50d339","block_hash":"ce8c212a61f844a62d930ddd754d27e36b42afa0913f576add95e302d4f9644f","nonce":0}
+{"index":0,"timestamp":"2026-09-23T13:38:08.324936+00:00","merkle_root":"0000000000000000000000000000000000000000000000000000000000000000","attribution_matrix":{},"prev_block_hash":"0000000000000000000000000000000000000000000000000000000000000000","block_hash":"b0d19af362e2a809b84f6b5d2e11201ca89b06040cf21d6d3f7665b7b66d935a","nonce":0}
+{"index":1,"timestamp":"2026-09-23T13:38:08.329047+00:00","merkle_root":"2b70a5d9429f1d791a48f86861d3343fec03d4aa481716e993e2a11d8b2d16d1","attribution_matrix":{"sarCalibrationVerified":1.0,"speckleLeeFilterApplied":1.0},"prev_block_hash":"b0d19af362e2a809b84f6b5d2e11201ca89b06040cf21d6d3f7665b7b66d935a","block_hash":"b5c6d9bd2a96d947b0f299269889ef0612a3da5eec2e7d10d3c32787efd72320","nonce":0}
+{"index":2,"timestamp":"2026-09-23T13:38:08.330532+00:00","merkle_root":"97224faed4806db32b748745022d96c086a409bf107ec305b25cad9e9c596105","attribution_matrix":{"aisDeduplicated":1.0},"prev_block_hash":"b5c6d9bd2a96d947b0f299269889ef0612a3da5eec2e7d10d3c32787efd72320","block_hash":"3117eacda7bcba55c0ad9dd0151524bfce60a3e407935d48105b3dabad082f90","nonce":0}
+{"index":3,"timestamp":"2026-09-23T13:38:08.332112+00:00","merkle_root":"ad15c9f4d0119bb473bb6ce4925f1b292545a6231bff19b83944fcc99a947a01","attribution_matrix":{"incoisCurrentsValidated":1.0,"ecmwfWindsInterpolated":1.0},"prev_block_hash":"3117eacda7bcba55c0ad9dd0151524bfce60a3e407935d48105b3dabad082f90","block_hash":"81b3d7b6628b2f35ebfbc8fe768ccf710d3b0c6f3ca23aac77a15db7bbd1cfef","nonce":0}
+{"index":4,"timestamp":"2026-09-23T13:38:08.334263+00:00","merkle_root":"f07bbd4b43db98dffdc7d1519004e545796c91ae6dff6b994abc9f4dfdc34495","attribution_matrix":{"backtrackProximityScore":0.962,"trajectoryCollinearityScore":0.918,"vesselPriorScore":1.0,"kineticAnomalyScore":0.885,"temporalPlausibilityScore":1.0},"prev_block_hash":"81b3d7b6628b2f35ebfbc8fe768ccf710d3b0c6f3ca23aac77a15db7bbd1cfef","block_hash":"40aba487f101cee39c42c6c1fbc638cc9df4e752a00f4627140381b7d0539380","nonce":0}
