@@ -54,11 +54,28 @@ class TestChainIntegrity:
         # Either prev-link mismatch or hash inconsistency must now fail
         assert ledger.verify_chain() is False
 
-    def test_block_hashes_have_proof_of_work_prefix(self):
+    def test_block_hashes_have_cryptographic_chaining(self):
         ledger = _build_ledger()
-        for block in ledger.chain[1:]:
-            assert block.block_hash.startswith("00")
-            assert block.nonce >= 0
+        for i in range(1, len(ledger.chain)):
+            block = ledger.chain[i]
+            prev = ledger.chain[i-1]
+            assert block.prev_block_hash == prev.block_hash
+            assert len(block.block_hash) == 64
+
+    def test_ledger_disk_persistence(self, tmp_path):
+        store_file = tmp_path / "test_ledger.json"
+        hashes = build_evidence_hashes(MOCK_SAR_SCENES[0], MOCK_AIS_VESSELS, MOCK_METOCEAN)
+        
+        ledger1 = TamperEvidentLedger(storage_path=str(store_file))
+        ledger1.add_block(hashes["sar_hash"], {"sarCalibrationVerified": 1.0})
+        ledger1.add_block(hashes["ais_hash"], {"aisDeduplicated": 1.0})
+        assert len(ledger1.chain) == 3
+        
+        # Load second instance pointing to the same file
+        ledger2 = TamperEvidentLedger(storage_path=str(store_file))
+        assert len(ledger2.chain) == 3
+        assert ledger2.verify_chain() is True
+        assert ledger2.chain[-1].block_hash == ledger1.chain[-1].block_hash
 
     def test_genesis_prev_is_zero(self):
         ledger = _build_ledger()

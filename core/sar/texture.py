@@ -68,14 +68,38 @@ def normalize_image(image: np.ndarray, percentiles: Tuple[float, float] = (2, 98
     return normalized
 
 
+def _expand_grid(grid_arr: np.ndarray, target_shape: Tuple[int, int]) -> np.ndarray:
+    """Expand sampled grid back to target (H, W) array."""
+    if grid_arr.shape == target_shape:
+        return grid_arr.astype(np.float32)
+    th, tw = target_shape
+    gh, gw = grid_arr.shape
+    if gh <= 1 or gw <= 1:
+        return np.full(target_shape, grid_arr[0, 0] if grid_arr.size > 0 else 0.0, dtype=np.float32)
+    from scipy.ndimage import zoom
+    zh = th / gh
+    zw = tw / gw
+    expanded = zoom(grid_arr, (zh, zw), order=1)
+    res = np.zeros(target_shape, dtype=np.float32)
+    eh = min(expanded.shape[0], th)
+    ew = min(expanded.shape[1], tw)
+    res[:eh, :ew] = expanded[:eh, :ew]
+    if eh < th:
+        res[eh:, :] = res[eh-1:eh, :]
+    if ew < tw:
+        res[:, ew:] = res[:, ew-1:ew]
+    return res
+
+
 def extract_haralick_features(
     image: np.ndarray,
     window_size: int = 15,
     distances: List[int] = [1, 3],
-    angles: List[float] = [0, np.pi/4, np.pi/2, 3*np.pi/4]
+    angles: List[float] = [0, np.pi/4, np.pi/2, 3*np.pi/4],
+    stride: Optional[int] = None
 ) -> TextureFeatures:
     """
-    Extract Haralick texture features using sliding window.
+    Extract Haralick texture features using vectorized moment filters and strided GLCM.
     
     Features computed:
     - Contrast: Local intensity variation
@@ -86,118 +110,104 @@ def extract_haralick_features(
     - ASM: Angular Second Moment (same as energy)
     - Entropy: Randomness measure
     """
+    from scipy import ndimage
     h, w = image.shape
     half_win = window_size // 2
-    
+
+    # Fast vectorized calculation of local mean, variance, and standard deviation (O(1) per pixel)
+    img_f32 = image.astype(np.float32)
+    mean_map = ndimage.uniform_filter(img_f32, size=window_size)
+    mean_sq = ndimage.uniform_filter(img_f32**2, size=window_size)
+    var_map = np.maximum(0.0, mean_sq - mean_map**2)
+    std_map = np.sqrt(var_map)
+
+    # Grid sampling for GLCM to avoid quadratic per-pixel computation
+    step = stride if stride is not None else max(8, window_size // 2)
+    if min(h, w) <= 32:
+        step = max(2, window_size // 4)
+
+    sample_r = list(range(0, h, step))
+    sample_c = list(range(0, w, step))
+    if not sample_r or sample_r[-1] != h - 1:
+        sample_r.append(max(0, h - 1))
+    if not sample_c or sample_c[-1] != w - 1:
+        sample_c.append(max(0, w - 1))
+
+    grid_h = len(sample_r)
+    grid_w = len(sample_c)
+
+    g_contrast = np.zeros((grid_h, grid_w), dtype=np.float32)
+    g_dissimilarity = np.zeros((grid_h, grid_w), dtype=np.float32)
+    g_homogeneity = np.zeros((grid_h, grid_w), dtype=np.float32)
+    g_energy = np.zeros((grid_h, grid_w), dtype=np.float32)
+    g_correlation = np.zeros((grid_h, grid_w), dtype=np.float32)
+    g_asm = np.zeros((grid_h, grid_w), dtype=np.float32)
+    g_entropy = np.zeros((grid_h, grid_w), dtype=np.float32)
+
     pad_h = half_win
     pad_w = half_win
     padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode="reflect")
-    
-    features = {
-        "contrast": np.zeros((h, w), dtype=np.float32),
-        "dissimilarity": np.zeros((h, w), dtype=np.float32),
-        "homogeneity": np.zeros((h, w), dtype=np.float32),
-        "energy": np.zeros((h, w), dtype=np.float32),
-        "correlation": np.zeros((h, w), dtype=np.float32),
-        "asm": np.zeros((h, w), dtype=np.float32),
-        "entropy": np.zeros((h, w), dtype=np.float32),
-        "mean": np.zeros((h, w), dtype=np.float32),
-        "variance": np.zeros((h, w), dtype=np.float32),
-        "std_dev": np.zeros((h, w), dtype=np.float32),
-    }
-    
-    for i in range(h):
-        for j in range(w):
-            window = padded[i:i + window_size, j:j + window_size]
-            window_norm = normalize_image(window)
-            
+    normalized = normalize_image(padded)
+    quantized_ubyte = (normalized * 63).astype(np.uint8)
+
+    for gi, i in enumerate(sample_r):
+        for gj, j in enumerate(sample_c):
+            window = quantized_ubyte[i:i + window_size, j:j + window_size]
             try:
-                glcm = compute_glcm(window_norm, distances, angles)
-                
-                features["contrast"][i, j] = np.mean(graycoprops(glcm, "contrast"))
-                features["dissimilarity"][i, j] = np.mean(graycoprops(glcm, "dissimilarity"))
-                features["homogeneity"][i, j] = np.mean(graycoprops(glcm, "homogeneity"))
-                features["energy"][i, j] = np.mean(graycoprops(glcm, "energy"))
-                features["correlation"][i, j] = np.mean(graycoprops(glcm, "correlation"))
-                features["asm"][i, j] = np.mean(graycoprops(glcm, "ASM"))
-                
-                entropy = -np.sum(glcm * np.log2(glcm + 1e-10))
-                features["entropy"][i, j] = entropy
-                
-                features["mean"][i, j] = np.mean(window)
-                features["variance"][i, j] = np.var(window)
-                features["std_dev"][i, j] = np.std(window)
-                
-            except Exception as e:
-                logger.debug(f"GLCM computation failed at ({i},{j}): {e}")
-                continue
-    
-    return TextureFeatures(**features)
+                glcm = graycomatrix(
+                    window,
+                    distances=distances,
+                    angles=angles,
+                    levels=64,
+                    symmetric=True,
+                    normed=True
+                )
+                g_contrast[gi, gj] = float(np.mean(graycoprops(glcm, "contrast")))
+                g_dissimilarity[gi, gj] = float(np.mean(graycoprops(glcm, "dissimilarity")))
+                g_homogeneity[gi, gj] = float(np.mean(graycoprops(glcm, "homogeneity")))
+                g_energy[gi, gj] = float(np.mean(graycoprops(glcm, "energy")))
+                g_correlation[gi, gj] = float(np.mean(graycoprops(glcm, "correlation")))
+                g_asm[gi, gj] = float(np.mean(graycoprops(glcm, "ASM")))
+
+                nonzero_p = glcm[glcm > 0]
+                g_entropy[gi, gj] = float(-np.sum(nonzero_p * np.log2(nonzero_p + 1e-10)))
+            except Exception:
+                pass
+
+    return TextureFeatures(
+        contrast=_expand_grid(g_contrast, (h, w)),
+        dissimilarity=_expand_grid(g_dissimilarity, (h, w)),
+        homogeneity=_expand_grid(g_homogeneity, (h, w)),
+        energy=_expand_grid(g_energy, (h, w)),
+        correlation=_expand_grid(g_correlation, (h, w)),
+        asm=_expand_grid(g_asm, (h, w)),
+        entropy=_expand_grid(g_entropy, (h, w)),
+        mean=mean_map,
+        variance=var_map,
+        std_dev=std_map
+    )
 
 
 def extract_haralick_fast(
     image: np.ndarray,
     window_size: int = 15,
     distances: List[int] = [1],
-    angles: List[float] = [0, np.pi/4]
+    angles: List[float] = [0, np.pi/4],
+    stride: Optional[int] = None
 ) -> TextureFeatures:
     """
-    Fast Haralick feature extraction using integral images for mean/var
-    and reduced GLCM computation.
+    Ultra-fast Haralick feature extraction using integral images for mean/var
+    and reduced GLCM computation with strided grid sampling.
     """
-    h, w = image.shape
-    half_win = window_size // 2
-    
-    padded = np.pad(image, half_win, mode="reflect")
-    normalized = normalize_image(padded)
-    normalized_ubyte = img_as_ubyte(normalized)
-    
-    features = {
-        "contrast": np.zeros((h, w), dtype=np.float32),
-        "dissimilarity": np.zeros((h, w), dtype=np.float32),
-        "homogeneity": np.zeros((h, w), dtype=np.float32),
-        "energy": np.zeros((h, w), dtype=np.float32),
-        "correlation": np.zeros((h, w), dtype=np.float32),
-        "asm": np.zeros((h, w), dtype=np.float32),
-        "entropy": np.zeros((h, w), dtype=np.float32),
-        "mean": np.zeros((h, w), dtype=np.float32),
-        "variance": np.zeros((h, w), dtype=np.float32),
-        "std_dev": np.zeros((h, w), dtype=np.float32),
-    }
-    
-    for i in range(h):
-        for j in range(w):
-            window = normalized_ubyte[i:i + window_size, j:j + window_size]
-            
-            try:
-                glcm = graycomatrix(
-                    window,
-                    distances=distances,
-                    angles=angles,
-                    levels=256,
-                    symmetric=True,
-                    normed=True
-                )
-                
-                features["contrast"][i, j] = np.mean(graycoprops(glcm, "contrast"))
-                features["dissimilarity"][i, j] = np.mean(graycoprops(glcm, "dissimilarity"))
-                features["homogeneity"][i, j] = np.mean(graycoprops(glcm, "homogeneity"))
-                features["energy"][i, j] = np.mean(graycoprops(glcm, "energy"))
-                features["correlation"][i, j] = np.mean(graycoprops(glcm, "correlation"))
-                features["asm"][i, j] = np.mean(graycoprops(glcm, "ASM"))
-                
-                entropy = -np.sum(glcm * np.log2(glcm + 1e-10))
-                features["entropy"][i, j] = entropy
-                
-            except Exception:
-                pass
-            
-            orig_window = padded[i:i + window_size, j:j + window_size]
-            features["mean"][i, j] = np.mean(orig_window)
-            features["variance"][i, j] = np.var(orig_window)
-            features["std_dev"][i, j] = np.std(orig_window)
-    
-    return TextureFeatures(**features)
+    step = stride if stride is not None else max(8, window_size // 2)
+    return extract_haralick_features(
+        image=image,
+        window_size=window_size,
+        distances=distances,
+        angles=angles,
+        stride=step
+    )
+
 
 
 def compute_texture_feature_vector(features: TextureFeatures, window_size: int = 15) -> np.ndarray:
@@ -296,18 +306,31 @@ class LookAlikeDiscriminator:
         return best_class, confidence
     
     def classify_image(self, features: TextureFeatures) -> Tuple[np.ndarray, np.ndarray]:
-        """Classify entire image patch by patch."""
+        """Classify entire image patch by patch using vectorized array operations."""
         h, w = features.contrast.shape
-        class_map = np.zeros((h, w), dtype=np.uint8)
-        confidence_map = np.zeros((h, w), dtype=np.float32)
-        
-        for i in range(h):
-            for j in range(w):
-                class_id, conf = self.classify_patch(features, (i, j))
-                class_map[i, j] = class_id
-                confidence_map[i, j] = conf
-        
+        num_classes = len(self.feature_stats)
+        scores_stack = np.zeros((num_classes, h, w), dtype=np.float32)
+
+        feat_arrays = {
+            "contrast": features.contrast,
+            "homogeneity": features.homogeneity,
+            "entropy": features.entropy,
+            "correlation": features.correlation,
+        }
+
+        for class_id, stats in self.feature_stats.items():
+            class_score = np.zeros((h, w), dtype=np.float32)
+            for feat_name, (low, high) in stats.items():
+                arr = feat_arrays.get(feat_name)
+                if arr is not None:
+                    class_score += ((arr >= low) & (arr <= high)).astype(np.float32)
+            scores_stack[class_id] = class_score / max(1, len(stats))
+
+        class_map = np.argmax(scores_stack, axis=0).astype(np.uint8)
+        confidence_map = np.max(scores_stack, axis=0).astype(np.float32)
+
         return class_map, confidence_map
+
 
 
 def compute_slick_skeleton_orientation(binary_mask: np.ndarray) -> float:
@@ -327,12 +350,17 @@ def compute_slick_skeleton_orientation(binary_mask: np.ndarray) -> float:
     y_coords = coords[:, 0]
     x_coords = coords[:, 1]
     
-    mu = moments_central(skeleton, order=2)
-    nu = moments_normalized(mu)
+    # skimage moments_normalized requires moments of order >= 3 (shape >= 4x4)
+    mu = moments_central(skeleton.astype(np.float64), order=3)
+    nu = moments_normalized(mu, order=2)
     
-    theta = 0.5 * np.arctan2(2 * nu[1, 1], nu[2, 0] - nu[0, 2])
+    denom = nu[2, 0] - nu[0, 2]
+    if abs(denom) < 1e-12:
+        return 0.0
+    theta = 0.5 * np.arctan2(2 * nu[1, 1], denom)
     
-    return theta
+    return float(theta)
+
 
 
 def extract_slick_geometry(binary_mask: np.ndarray) -> Dict[str, float]:

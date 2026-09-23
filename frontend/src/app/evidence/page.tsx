@@ -42,7 +42,7 @@ export default function EvidenceLedgerPage() {
             ? { label: "VERIFIED", tone: "ok" }
             : { label: "UNVERIFIED", tone: "neutral" }
         }
-        subtitle={`Forensic chain of custody · node ${ledger.nodeId} · ${ledger.chainLength} blocks · proof-of-work anchored`}
+        subtitle={`Forensic chain of custody · node ${ledger.nodeId} · ${ledger.chainLength} blocks · cryptographic hash chain`}
         right={
           <>
             <StatusBadge

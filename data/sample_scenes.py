@@ -158,9 +158,9 @@ MOCK_AIS_VESSELS = [
     {
         "mmsi": 440123456,
         "imo": 9876543,
-        "vesselName": "INS KATTABOMMAN",
+        "vesselName": "MV COASTAL DEFENDER-IV",
         "flag": "India",
-        "vesselType": "FRIGATE",
+        "vesselType": "TUG_ESCORT",
         "latitude": 21.7500,
         "longitude": 69.0000,
         "speedOverGround": 15.2,

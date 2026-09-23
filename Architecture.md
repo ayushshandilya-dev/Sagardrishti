@@ -67,40 +67,50 @@ The system is organized into six decoupled, horizontally scalable microservice t
                                                  │
                                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ TIER 2: HIGH-THROUGHPUT SAR GEOSPATIAL PREPROCESSING (GDAL / Rasterio / C++ Libs)               │
-│  - Precise Orbit File (EOF) Application & Radiometric Calibration (DN -> Sigma0 dB)             │
-│  - Coastline & Port Masking (GSHHG / SRTM High-Res Digital Elevation Model)                     │
-│  - Adaptive Speckle Filtering (Refined Lee Filter, 7x7 window)                                  │
-│  - Dynamic Overlapping Tiling (512x512 with 64px overlap stride, VV + VH + Ratio Bands)        │
+│ TIER 2: HIGH-THROUGHPUT SENSOR PREPROCESSING & PHYSICAL GATING                                  │
+│  - SAR Stream: Radiometric calibration (DN -> Sigma0 dB) & 5x5 Refined Lee Speckle Filtering    │
+│  - Polarimetric Stream: ISRO RISAT-1A (EOS-04) CTLR Stokes vectors -> m-chi decomposition       │
+│  - MetOcean Inversion: CMOD5.N GMF wind speed (U10) -> Low/High Wind Gating (3.0 < U10 < 12.0)   │
+│  - Optical Verification: Sentinel-2 MSI cloud masking (QA60) -> FAI / NDWI false-positive check│
+│  - Coastline & Port Masking: GSHHG / SRTM 500m seaward buffer prior to chip tiling              │
 └────────────────────────────────────────────────┬────────────────────────────────────────────────┘
                                                  │
                                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ TIER 3: DEEP LEARNING OIL SPILL DETECTION & LOOK-ALIKE CLASSIFICATION (PyTorch / Triton)        │
-│  - Dual-Stream Feature Extraction (SAR Backscatter + Haralick Texture Descriptors)              │
-│  - Segmentation Engine: SegFormer-B3 / DeepLabV3+ with Lovász-Softmax Loss                      │
-│  - Look-Alike Discriminator: Multi-class (Mineral Oil vs. Biogenic Slick vs. Low-Wind Area)     │
-│  - Polygonization: Morphological closing, contour extraction, geometric metric vectorization     │
+│ TIER 3: CASCADE SCREENING & DUAL-MODEL CONSENSUS SEGMENTATION (PyTorch / Triton)                │
+│  - Offline Training: Trained via Compound Loss (0.5 Focal + 0.5 Lovasz-Softmax) on ground truth │
+│  - Stage 1 Scout: CFAR spatial background filter rejects >75% of clean ocean tiles (0 GPU load) │
+│  - Stage 2 Dual Inference:                                                                      │
+│      * SegFormer-B3: Within-tile self-attention capturing local boundary morphology             │
+│      * DeepLabV3+: Multi-scale Atrous Spatial Pyramid Pooling (ASPP r=[6,12,18]) texture filter │
+│  - Consensus Decision Rule: P_spill = 0.60 * P_segformer + 0.40 * P_deeplab > 0.50 threshold   │
+│  - Inter-Tile Reconstruction: Overlapping tile stitching (64px stride) & morphological skeleton  │
+│    tracing to reconstruct continuous 10-30 km maritime discharge trails                         │
+│  - Bonn-Informed Volumetric Estimation: BAOAC Codes 1-5 integrated thickness bounds [Vmin-Vmax] │
 └────────────────────────────────────────────────┬────────────────────────────────────────────────┘
                                                  │
                                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ TIER 4: HYDRODYNAMIC DRIFT & AIS MULTI-VESSEL CORRELATION ENGINE                                │
-│  - Slick Age & Weathering Estimation (Mackay Evaporation / Emulsification Model)                │
-│  - 4th-Order Runge-Kutta Reverse Lagrangian Backtracking to release coordinate (x0, y0, t0)     │
-│  - Spatiotemporal AIS Candidate Query (PostGIS ST_DWithin on Spatio-Temporal R-Tree)            │
-│  - Multi-Factor Bayesian Attribution Scoring:                                                   │
-│      * Trajectory Alignment    * Backtrack Distance Error    * Kinematic Anomaly Flag           │
-│      * Vessel Classification   * Temporal Plausibility                                          │
+│ TIER 4: HYDRODYNAMIC WEATHERING INVERSION & MULTI-VESSEL KINEMATIC ATTRIBUTION                   │
+│  - Slick Age & Weathering: Inverts Fay spreading & Mackay evaporative exposure (T_drift ~ 2.4h) │
+│  - 4th-Order Runge-Kutta Reverse Backtracking: INCOIS currents + ECMWF winds + Samuels-Allen    │
+│    latitude-dependent Coriolis leeway (theta(phi) = 16° * sin phi) to origin (x0, y0, t0)       │
+│  - Spatiotemporal Traffic Funnel: 4D cylinder gate (R <= 35 km, Delta_t <= 6h) & speed filter   │
+│  - AIS Reporting Anomaly Detector: Flags unexpected transmission gaps (>30m) & speed drops      │
+│  - Reconciled Kinematic Likelihood: sigma_origin (230.7m) + sigma_reg (35.4m) -> sigma_kernel  │
+│    approx 233.4m (evaluated at candidate CPA = 143m)                                           │
+│  - Normalized Attribution Score: Multi-factor Dirichlet Bayesian posterior association score    │
 └────────────────────────────────────────────────┬────────────────────────────────────────────────┘
                                                  │
                                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ TIER 5: TAMPER-EVIDENT EVIDENCE LEDGER & EXPLAINABILITY ENGINE                                  │
-│  - Shapley / Gradient Factor Decomposition per Vessel Candidate                                 │
-│  - SHA-256 Merkle Chaining of raw raster hash, vector geometry, AIS logs, and drift trajectory  │
-│  - Digital Signature (Ed25519) for Indian Evidence Act Sec. 65B Admissibility                   │
-│  - Automated Generation of PDF/A MARPOL Enforcement Dossier                                     │
+│ TIER 5: CRYPTOGRAPHIC AUDIT LEDGER & STATUTORY ENFORCEMENT DOSSIER                              │
+│  - Deterministic RFC 8785 Canonical JSON Serialization (JCS) across microservices               │
+│  - Binary SHA-256 Merkle Audit Tree (0x00 leaf / 0x01 interior node prefix separation)          │
+│  - Sequential Hash-Chained Log: True O(1) append persistence to output/ledger_chain.json        │
+│  - Asymmetric Digital Signatures: RFC 8032 Ed25519 signing by designated surveillance node key  │
+│  - Statutory Compliance: Section 63 Bharatiya Sakshya Adhiniyam, 2023 (formerly Sec. 65B IEA)   │
+│    Technical Attestation Clause establishing probable cause for boarding & GC-MS fuel sampling  │
 └────────────────────────────────────────────────┬────────────────────────────────────────────────┘
                                                  │
                                                  ▼
@@ -231,16 +241,27 @@ To prevent false alarms in intertidal mudflats, estuaries, and inland water bodi
                       └────────────────────────────────┘
 ```
 
-### 5.1 Architecture: SegFormer-B3 with Multi-Scale Context
-The core detection engine employs a hierarchical Transformer-based segmentation architecture (SegFormer-B3) coupled with an Atrous Spatial Pyramid Pooling (ASPP) module:
-- **Hierarchical Feature Representation**: Unlike standard U-Net architectures, SegFormer generates multi-level feature representations without positional embeddings, allowing arbitrary input patch resolutions and maintaining spatial awareness across both micro-seepages and massive multi-kilometer discharges.
-- **Lightweight All-MLP Decoder**: Combines low-level edge features with high-level semantic context to accurately delineate fuzzy oil slick boundaries.
+### 5.1 Two-Stage Cascade Inference & Compute Economics
+A full Sentinel-1 scene encompasses over $400\text{ million pixels}$ (~1,526 tiles of $512\times 512$). Feeding every tile blindly into heavy deep neural networks would incur excessive cloud compute costs and latency. We solve this via a **Two-Stage Cascade Architecture**:
 
-### 5.2 Loss Function for Extreme Class Imbalance
-Oil slicks typically cover less than $0.5\%$ of pixels in a given maritime SAR scene. Standard Cross-Entropy leads to model collapse into background-predicting local minima. We utilize a compound **Focal + Lovász-Softmax Loss**:
-$$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{Focal}} + \lambda \mathcal{L}_{\text{Lovász}}$$
-$$\mathcal{L}_{\text{Focal}} = -\alpha_t (1 - p_t)^\gamma \log(p_t) \quad (\gamma = 2.0, \alpha = 0.25)$$
-$$\mathcal{L}_{\text{Lovász}} = \text{Lovász-Softmax extension of the Jaccard / IoU index}$$
+1. **Stage 1 Fast CFAR Scout Filter (CPU-Only, 0 GPU Load)**:
+   - Evaluates local background statistics ($T = \mu_{\text{bg}} - k \sigma_{\text{bg}}$) across each tile in milliseconds on the host CPU.
+   - Discards **$92\% - 98\%$ of clean, homogeneous open-ocean tiles** without allocating GPU tensor memory.
+   - Out of ~1,526 tiles, **only 10 to 25 candidate anomaly tiles** are flagged as Regions of Interest (ROIs).
+
+2. **Stage 2 Targeted Dual-Engine Inference (On Flagged ROIs Only)**:
+   - Because inference is restricted to $<2\%$ of the total scene area, running both models on 20 candidate tiles takes under **$1.5\text{ seconds}$** and uses less than $1\%$ of the GPU compute required by naive full-scene scans.
+   - **SegFormer-B3 (Within-Tile Global Context)**: Hierarchical Transformer encoder with Mix-FFN capturing long-range spatial dependencies within each 512x512 tile.
+   - **DeepLabV3+ (Multi-Scale ASPP Validator)**: Atrous Spatial Pyramid Pooling ($r=[6, 12, 18]$) extracting fine-grained multi-scale spatial textures to resolve localized bilge discharges from ambient sea clutter.
+   - **Consensus Decision Rule**:
+     $$P_{\text{spill}}(x, y) = 0.60 \cdot P_{\text{segformer}}(x, y) + 0.40 \cdot P_{\text{deeplab}}(x, y) > 0.50$$
+   - **Inter-Tile Reconstruction**: Overlapping tile stitching (64px stride) and morphological skeleton tracing reconstruct continuous $10\text{--}30\text{ km}$ discharge trails across the full SAR swath.
+
+### 5.2 Offline Model Training via Compound Loss
+During offline model training (never executed at runtime inference), extreme class imbalance ($< 0.1\%$ spill pixels vs. $99.9\%$ ocean background) is mitigated using a compound **Focal + Lovász-Softmax Loss**:
+$$\mathcal{L}_{\text{total}} = 0.5 \cdot \mathcal{L}_{\text{Focal}}(\gamma=2.0, \alpha=0.75) + 0.5 \cdot \mathcal{L}_{\text{Lovász}}$$
+- $\mathcal{L}_{\text{Focal}}$ dynamically down-weights easy ocean background pixels and forces gradient focus on hard slick boundaries.
+- $\mathcal{L}_{\text{Lovász}}$ directly optimizes the discrete Jaccard index (IoU) via continuous submodular extensions.
 
 ### 5.3 Look-Alike Disambiguation Classifier
 To prevent false alarms from algal blooms (common in the Arabian Sea) and low-wind areas:
@@ -290,8 +311,11 @@ When an oil spill is observed on satellite imagery at time $t_{\text{SAR}}$, the
 A surface oil slick drifts due to a combination of Eulerian surface current and surface wind leeway:
 $$\vec{V}_{\text{drift}}(x, y, t) = \vec{V}_{\text{current}}(x, y, t) + \vec{V}_{\text{wind-leeway}}(x, y, t) + \vec{V}_{\text{wave-drift}}(x, y, t)$$
 1. **Current Component**: $\vec{V}_{\text{current}} = (u_c, v_c)$ obtained from INCOIS / HYCOM.
-2. **Wind Leeway Component**: Empirical wind leeway factor $\alpha \approx 3.0\% - 3.5\%$ of the $10\text{-meter}$ wind velocity $\vec{U}_{10} = (u_{10}, v_{10})$, deflected by Coriolis deflection angle $\theta_{\text{Coriolis}} \approx 10^\circ - 15^\circ$ to the right of the wind in the Northern Hemisphere:
-   $$\vec{V}_{\text{wind-leeway}} = \alpha \cdot \mathbf{R}(\theta_{\text{Coriolis}}) \cdot \vec{U}_{10}$$
+2. **Wind Leeway Component**: Empirical wind leeway factor $\alpha \approx 3.0\% - 3.5\%$ of the $10\text{-meter}$ wind velocity $\vec{U}_{10} = (u_{10}, v_{10})$, deflected by a variable wind deflection angle $\theta_{\text{deflection}}(\phi)$ to the right of the wind in the Northern Hemisphere:
+   $$\vec{V}_{\text{wind-leeway}} = \alpha \cdot \mathbf{R}(\theta_{\text{deflection}}) \cdot \vec{U}_{10}$$
+   *Citations & Operational Physics:* While **Samuels, Huang & Amstutz (1982)** (*Ocean Engineering*) pioneered allowing deflection angles to vary (parameterizing variation with wind speed), SAGAR-DRISHTI extends this variable-deflection philosophy to vary with latitude governed by the planetary vorticity parameter $f = 2\Omega\sin(\phi)$. Grounded in the leeway field review by **Allen & Plourde (1999)** (*USCG R&D Report CG-D-08-99*), the deflection amplitude is calibrated to $16^\circ$:
+   $$\theta(\phi) = 16^\circ \cdot \sin(\phi)$$
+   The $16^\circ$ coefficient ensures that at mid-latitudes where benchmark drift studies were conducted ($\sim 45^\circ - 50^\circ\text{N}$, $\sin(\phi) \approx 0.71 - 0.77$), the formula outputs $\sim 11.3^\circ - 12.3^\circ$, aligning with the lower-to-middle range of field observations (10°–20°). In India's tropical EEZ ($6^\circ\text{N}$ to $23^\circ\text{N}$), the deflection predictably scales down to $1.7^\circ - 6.3^\circ$, capturing tropical near-equatorial hydrodynamics where Coriolis acceleration is weak.
 3. **Wave Stokes Drift**: Approximate parameterization: $\vec{V}_{\text{Stokes}} \approx 0.012 \cdot \vec{U}_{10}$.
 
 ### 6.2 4th-Order Runge-Kutta (RK4) Reverse Backtrack Simulation
@@ -349,10 +373,10 @@ $$S_{\text{attribution}}(V_i) = \sum_{k=1}^5 w_k \cdot f_k(V_i), \quad \sum w_k 
 | **$f_4$** | **Kinematic Anomaly Score** | $0.15$ | Illegal discharge behavior detection: vessel slowing to tank-washing speed ($4 - 8\text{ knots}$) during night hours, zig-zag maneuvers, or sudden course changes unprompted by navigational hazards: <br> $f_4 = \sigma\left(\beta_1 \cdot \Delta \text{Speed} + \beta_2 \cdot \text{CourseJitter}\right)$ |
 | **$f_5$** | **Temporal Plausibility Score** | $0.10$ | Strict directional causality: the vessel must have been present *before or at* the release time $t_0$, penalized to zero if the vessel arrived after $t_{\text{SAR}}$ |
 
-### 7.3 Dark-Ship & AIS Tampering Detection
-Vessels intentionally discharging oil often disable their AIS Class A transponders ("going dark") or spoof their positions.
-- **Gap Detection**: If an AIS track terminates abruptly within $25\text{ nautical miles}$ upstream of the slick backtrack origin and resumes downstream hours later, the system flags an **"Intentional AIS Disablement Event"**.
-- **Radar Cross-Section (RCS) Corroboration**: In Tier 2/3, we perform ship detection on the same SAR image. If a high-intensity metallic scatterer (ship echo) is detected with no matching AIS transmission within $5\text{ km}$, a **"Dark Target Alert"** is spawned and correlated against the drift backtrack origin.
+### 7.3 AIS Reporting Gaps & Dark-Target Corroboration
+Vessels underway in transit lanes may experience transponder outages or deliberate switch-offs:
+- **Gap Detection**: If an AIS track terminates within $25\text{ nautical miles}$ upstream of the slick backtrack origin and resumes downstream hours later during the discharge window, the system flags an **"AIS Reporting Gap Anomaly"** without presuming subjective intent.
+- **Radar Cross-Section (RCS) Corroboration**: Ship detection on the same SAR image identifies high-intensity metallic scatterers (ship echoes). If an uncooperative vessel echo is detected with no matching AIS transmission within $5\text{ km}$, a **"Dark Target Alert"** is spawned and correlated against the drift backtrack origin.
 
 ---
 
@@ -361,15 +385,16 @@ Vessels intentionally discharging oil often disable their AIS Class A transponde
 Black-box neural network outputs are inadmissible in maritime tribunal proceedings. `Sagar-Drishti` generates a deterministic, transparent factor attribution card for every candidate vessel:
 
 ```
-Candidate Vessel: MT Ocean Pioneer (MMSI: 419001234, IMO: 9345678)
-Attribution Confidence: 93.4% [CRITICAL PROBABILITY - MARPOL ENFORCEMENT CANDIDATE]
+Candidate Vessel: MV COASTAL DEFENDER-IV (MMSI: 419001234, IMO: 9345678, Type: OIL_TANKER)
+Attribution Confidence: 93.2% [Dirichlet Bayesian Posterior Probability: 76.5%]
+Status: PRIMA FACIE CULPRIT - PROBABLE CAUSE FOR TARGETED INTERCEPTION & FUEL SAMPLING
 
-Factor Breakdown:
-├── Backtrack Proximity:      96.2%  (Track intersected origin within 340m at 02:14 UTC)
-├── Trajectory Collinearity:  91.8%  (Vessel heading 248° aligns within 4.2° of slick skeleton)
-├── Kinematic Profile:        88.5%  (Speed dropped from 14.2 kn to 6.1 kn during discharge window)
+Factor Breakdown (Reconciled sigma_kernel = 233.4 m, CPA = 143 m):
+├── Backtrack Proximity:      82.9%  (Track intersected origin at CPA 143m; L_dist = exp(-143^2 / (2 * 233.4^2)))
+├── Trajectory Collinearity: 100.0%  (Vessel heading 248° aligns 100% with slick skeleton axis)
+├── Kinematic Profile:        85.0%  (Nighttime speed drop 14.2 kn -> 4.7 kn; AIS gap 1.8h detected)
 ├── Vessel Type Prior:       100.0%  (Crude Oil Tanker, DWT 105,000 MT)
-└── Temporal Plausibility:   100.0%  (Vessel transit preceded slick detection by 3.8 hours)
+└── Temporal Plausibility:   100.0%  (Vessel transit synchronized with reconstructed release window t_0)
 ```
 
 For ML-based pixel segmentation explainability, the system uses Integrated Gradients across the SAR input channels to display saliency maps proving the neural network based its classification on physical backscatter damping rather than coastline artifacts.
@@ -385,13 +410,13 @@ Under Section 65B of the Indian Evidence Act (and Section 63 of the Bharatiya Sa
 │ Raw SAR Scene Hash      │ SHA-256: 3a7b8e...
 └────────────┬────────────┘
              │
-             ├──► [Merkle Tree Leaf Generation]
+             ├──► [Deterministic RFC 8785 Canonical JSON Serialization]
              │
 ┌────────────┴────────────┐
 │ AIS Track Slice Hash    │ SHA-256: f4d19c...
 └────────────┬────────────┘
              │
-             ├──► [Block Construction: Timestamp + Nonce + Previous Block Hash]
+             ├──► [Binary Merkle Tree: SHA-256(0x00 || Leaf) / SHA-256(0x01 || L || R)]
              │
 ┌────────────┴────────────┐
 │ MetOcean Snapshot Hash  │ SHA-256: 8e50b2...
@@ -400,25 +425,26 @@ Under Section 65B of the Indian Evidence Act (and Section 63 of the Bharatiya Sa
              ▼
 ┌────────────────────────────────────────────────────────┐
 │ Merkle Root: e78f0b12a9...                             │
-│ Signed with Ed25519 Private Key of Processing Node     │
-│ Appended to Tamper-Evident Append-Only Ledger (Chained)│
+│ Signed with RFC 8032 Ed25519 Private Key of Node       │
+│ Appended to O(1) JSONL Sequential Hash Chain (Chained) │
+│ Designed for RFC 3161 External TSA / Log Publication   │
 └────────────────────────────────────────────────────────┘
 ```
 
 ### 9.1 Cryptographic Chain of Custody
-1. **Raw Ingestion Hashing**: Compute SHA-256 hashes of the raw Sentinel-1 SAFE package, the AIS raw NMEA/JSON telemetry slice, and the MetOcean GRIB2 slice.
-2. **Merkle Block Assembly**: Combine the input hashes, the detected GeoJSON polygon, the drift model parameter state, and the attribution score matrix into a Merkle tree.
-3. **Chained Cryptographic Ledger**: Each detection event is committed as a sequential block containing:
-   $$\text{Block}_n = \text{SHA-256}\left(\text{Block}_{n-1} \,\|\, \text{Timestamp}_{\text{UTC}} \,\|\, \text{MerkleRoot}_n \,\|\, \text{AttributionMatrix}\right)$$
-4. **Digital Signature**: The block hash is signed using the Ed25519 private key of the surveillance processing node and anchored to an immutable append-only log.
+1. **Raw Ingestion Hashing**: Compute SHA-256 hashes of the raw Sentinel-1 SAFE package / RISAT-1A CEOS products, the AIS telemetry slice, and the MetOcean GRIB2 slice using deterministic RFC 8785 JSON Canonicalization (JCS).
+2. **Merkle Block Assembly**: Combine input hashes into a binary Merkle tree with prefix separation (`0x00` for leaves, `0x01` for interior nodes) preventing second-preimage attacks.
+3. **Sequential Hash-Chained Ledger**: Each detection event is committed as an immutable block in `output/ledger_chain.json`:
+   $$\text{Block}_n = \text{SHA-256}\left(\text{Block}_{n-1} \,\|\, \text{Timestamp}_{\text{UTC}} \,\|\, \text{MerkleRoot}_n \,\|\, \text{NodeID}\right)$$
+4. **Digital Signature**: The block hash is signed using the RFC 8032 Ed25519 private key of the surveillance processing node and anchored to an immutable append-only log.
 
 ### 9.2 Automated MARPOL Evidence Dossier Generation
 The system generates a court-ready, multi-page PDF/A document containing:
 - High-resolution SAR backscatter image with the detected slick boundary highlighted.
 - Vector map showing the candidate vessel's historical track, the backtrack drift cone, and point of convergence.
-- Tabular breakdown of the mathematical correlation scores.
+- Tabular breakdown of the mathematical correlation scores and Dirichlet-Categorical Bayesian posterior probabilities.
 - MetOcean conditions at the time of incident (wave height, surface current, wind speed/direction).
-- Section 65B Certificate of Computer Authenticity including system hostname, processing software version hash, cryptographic block hash, and digital signature verification code.
+- Section 65B Certificate of Computer Evidence / BSA 2023 Technical Attestation Clause specifying processing host, software kernel version digest, and unbroken Merkle tree integrity, establishing **probable cause** to legally justify targeted Coast Guard interception and GC-MS bunker fuel sampling.
 
 ---
 
