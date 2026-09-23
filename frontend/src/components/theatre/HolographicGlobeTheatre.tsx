@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { useRouter } from "next/navigation";
-import { buildRealisticEarthSystem } from "./realisticEarth";
 import {
   Shield,
   Activity,
@@ -175,19 +174,77 @@ export const HolographicGlobeTheatre: React.FC = () => {
     controls.enablePan = false;
     controlsRef.current = controls;
 
-    // ── PHOTOREALISTIC SATELLITE EARTH SYSTEM (NASA SPEC) ──
+    // ── AUTHENTIC NASA SATELLITE 3D EARTH (PHOTOREALISTIC EQUIRECTANGULAR MAP) ──
     const GLOBE_RADIUS = 10;
     const globeGroup = new THREE.Group();
     scene.add(globeGroup);
 
-    const { earthMesh, cloudMesh, atmosphereMesh, sunLight, ambientLight } =
-      buildRealisticEarthSystem(GLOBE_RADIUS);
-
-    scene.add(ambientLight);
+    // Physically Believable Directional Sunlight (Day/Night Terminator)
+    const sunLight = new THREE.DirectionalLight(0xffffff, 2.6);
+    sunLight.position.set(30, 8, 25);
     scene.add(sunLight);
 
+    // Deep space ambient lighting (keeps night side dark & moody)
+    const ambientLight = new THREE.AmbientLight(0x040e1c, 0.38);
+    scene.add(ambientLight);
+
+    // Load Genuine High-Resolution NASA Blue Marble Textures
+    const textureLoader = new THREE.TextureLoader();
+
+    const earthDayMap = textureLoader.load("/textures/earth/earth_day_2048.jpg");
+    earthDayMap.colorSpace = THREE.SRGBColorSpace;
+
+    const earthNormalMap = textureLoader.load("/textures/earth/earth_normal_2048.jpg");
+    const earthSpecularMap = textureLoader.load("/textures/earth/earth_specular_2048.jpg");
+    const earthCloudsMap = textureLoader.load("/textures/earth/earth_clouds_1024.png");
+
+    // 1. Earth Sphere Mesh (SphereGeometry with Phong Specular & Normal Relief)
+    const earthGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 96, 96);
+    const earthMat = new THREE.MeshPhongMaterial({
+      map: earthDayMap,
+      normalMap: earthNormalMap,
+      normalScale: new THREE.Vector2(0.85, 0.85),
+      specularMap: earthSpecularMap,
+      specular: new THREE.Color(0x2d4f6e), // Subtle, realistic ocean sun glint
+      shininess: 18,
+    });
+    const earthMesh = new THREE.Mesh(earthGeo, earthMat);
     globeGroup.add(earthMesh);
+
+    // 2. Realistic Orbital Cloud Layer (Separate sphere with 3D parallax)
+    const cloudGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.012, 64, 64);
+    const cloudMat = new THREE.MeshStandardMaterial({
+      map: earthCloudsMap,
+      transparent: true,
+      opacity: 0.82,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
     globeGroup.add(cloudMesh);
+
+    // 3. Delicate Blue Rayleigh Atmospheric Rim
+    const atmoGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.026, 64, 64);
+    const atmoMat = new THREE.ShaderMaterial({
+      transparent: true,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      vertexShader: `
+        varying vec3 vNormal;
+        void main(){
+          vNormal = normalize(normalMatrix * normal);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vNormal;
+        void main(){
+          float intensity = pow(0.72 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.8);
+          gl_FragColor = vec4(0.18, 0.62, 1.0, 1.0) * intensity * 1.4;
+        }
+      `,
+    });
+    const atmosphereMesh = new THREE.Mesh(atmoGeo, atmoMat);
     scene.add(atmosphereMesh);
 
     // Initial orientation: Center on the Indian Ocean / Arabian Sea
