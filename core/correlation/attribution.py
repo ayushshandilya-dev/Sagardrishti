@@ -14,8 +14,28 @@ VESSEL_TYPE_PRIORS = {
 def backtrack_proximity_score(vessel_lat: float, vessel_lon: float,
                               vessel_time: float,
                               backtrack_lat: float, backtrack_lon: float,
-                              sigma_dist: float = 500.0) -> float:
-    """Exponential proximity score: f1 = exp(-min_dist^2 / (2*sigma^2))"""
+                              sigma_dist: float = 500.0,
+                              ellipse: Dict[str, float] | None = None) -> float:
+    """Exponential proximity score: f1 = exp(-min_dist^2 / (2*sigma^2)).
+    
+    If confidence ellipse parameters (semiMajorAxisMeters, semiMinorAxisMeters, orientationDeg)
+    are provided, computes Mahalanobis distance scaled to the 95% confidence bounds.
+    """
+    if ellipse and "semiMajorAxisMeters" in ellipse and "semiMinorAxisMeters" in ellipse:
+        a = max(float(ellipse["semiMajorAxisMeters"]), 50.0)
+        b = max(float(ellipse["semiMinorAxisMeters"]), 50.0)
+        theta_rad = np.radians(float(ellipse.get("orientationDeg", 0.0)))
+
+        dy = (vessel_lat - backtrack_lat) * 111139.0
+        dx = (vessel_lon - backtrack_lon) * (111139.0 * np.cos(np.radians(backtrack_lat)))
+
+        x_rot = np.cos(theta_rad) * dx + np.sin(theta_rad) * dy
+        y_rot = -np.sin(theta_rad) * dx + np.cos(theta_rad) * dy
+
+        maha_sq = (x_rot / a)**2 + (y_rot / b)**2
+        score = np.exp(-0.5 * maha_sq)
+        return float(np.clip(score, 0.0, 1.0))
+
     dist_meters = np.sqrt((vessel_lat - backtrack_lat)**2 + (vessel_lon - backtrack_lon)**2) * 111319.5
     score = np.exp(-(dist_meters**2) / (2 * sigma_dist**2))
     return float(np.clip(score, 0.0, 1.0))
@@ -35,8 +55,9 @@ def vessel_profile_prior(vessel_type: str) -> float:
     return float(VESSEL_TYPE_PRIORS.get(vessel_type, 0.1))
 
 def kinetic_anomaly_score(sog_before: float, sog_during: float,
-                          is_night: bool, course_jitter: float = 0.0) -> float:
-    """f4 = σ(β1 * ΔSpeed + β2 * CourseJitter) with day/night penalty.
+                          is_night: bool, course_jitter: float = 0.0,
+                          blackout_gap_minutes: float = 0.0) -> float:
+    """f4 = σ(β1 * ΔSpeed + β2 * CourseJitter + β3 * BlackoutGap) with day/night penalty.
     
     β1 = 0.3, β2 = 0.1 per Architecture.md §7.2.
     During night: full anomaly score.
@@ -45,7 +66,8 @@ def kinetic_anomaly_score(sog_before: float, sog_during: float,
     beta1, beta2 = 0.3, 0.1
     delta_speed = max(0, sog_before - sog_during)  # slowing down
     
-    raw = beta1 * delta_speed + beta2 * course_jitter
+    blackout_boost = 0.5 if blackout_gap_minutes >= 30.0 else 0.0
+    raw = beta1 * delta_speed + beta2 * course_jitter + blackout_boost
     
     # Sigmoid function
     score_night = 1.0 / (1.0 + np.exp(-raw))
@@ -55,6 +77,7 @@ def kinetic_anomaly_score(sog_before: float, sog_during: float,
         return float(np.clip(score_night, 0.0, 1.0))
     else:
         return float(np.clip(score_night * 0.5, 0.0, 1.0))
+
 
 def temporal_plausibility_score(vessel_arrival_time: float, discharge_time: float,
                                 sar_acquisition_time: float) -> float:
@@ -111,10 +134,12 @@ def compute_attribution_score(mmsi_data: Dict, backtrack_coords: Dict,
     # Backtrack origin
     backtrack_lat = backtrack_coords["latitude"]
     backtrack_lon = backtrack_coords["longitude"]
+    ellipse = backtrack_coords.get("confidenceEllipse") or backtrack_coords.get("ellipse")
+    blackout_gap = float(mmsi_data.get("blackout_gap_minutes", 0.0))
     
     # 1. Backtrack Proximity
     f1 = backtrack_proximity_score(vessel_lat, vessel_lon, vessel_time,
-                                   backtrack_lat, backtrack_lon)
+                                   backtrack_lat, backtrack_lon, ellipse=ellipse)
     
     # 2. Trajectory Collinearity
     f2 = trajectory_collinearity_score(cog, heading, mmsi_data.get("slick_skeleton", 0.0))
@@ -123,7 +148,7 @@ def compute_attribution_score(mmsi_data: Dict, backtrack_coords: Dict,
     f3 = vessel_profile_prior(vessel_profile)
     
     # 4. Kinematic Anomaly
-    f4 = kinetic_anomaly_score(sog_before, sog_during, is_night, course_jitter)
+    f4 = kinetic_anomaly_score(sog_before, sog_during, is_night, course_jitter, blackout_gap_minutes=blackout_gap)
     
     # 5. Temporal Plausibility
     f5 = temporal_plausibility_score(vessel_arrival, backtrack_coords.get("discharge_time", 0), sar_time)
@@ -163,7 +188,7 @@ class BayesianAttributionEngine:
         Score all candidate vessels and return ranked results.
         
         Args:
-            discharge_origin: Dict with latitude, longitude, discharge_time
+            discharge_origin: Dict with latitude, longitude, discharge_time, optional confidenceEllipse
             slick_skeleton: Skeleton orientation in degrees
             candidate_vessels: List of vessel data dicts
             
@@ -183,9 +208,11 @@ class BayesianAttributionEngine:
                 "speed_over_ground_during": vessel.get("speed_over_ground_during", 0),
                 "is_night": vessel.get("is_night", False),
                 "course_jitter": vessel.get("course_jitter", 0),
+                "blackout_gap_minutes": vessel.get("blackout_gap_minutes", 0.0),
                 "arrival_time_utc": vessel.get("arrival_time_utc", 0),
                 "slick_skeleton": slick_skeleton,
             }
+
             
             vessel_profile = vessel.get("vessel_type", "UNKNOWN")
             sar_time = vessel.get("sar_time", 0)

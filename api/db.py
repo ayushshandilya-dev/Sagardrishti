@@ -151,11 +151,18 @@ def run_migrations() -> None:
     import logging
     from pathlib import Path
 
-    from alembic import command
-    from alembic.config import Config
-
     logger = logging.getLogger("sagar.db")
+
+    try:
+        from alembic import command
+        from alembic.config import Config
+    except ImportError:
+        logger.warning("Alembic not installed; falling back to db.create_all()")
+        db.create_all()
+        return
+
     root = Path(__file__).resolve().parent.parent
+
 
     cfg = Config(str(root / "alembic.ini"))
     cfg.set_main_option("script_location", str(root / "migrations"))

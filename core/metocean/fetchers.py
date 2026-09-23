@@ -9,18 +9,25 @@ from typing import Dict, List, Tuple, Optional, Union
 from dataclasses import dataclass
 from pathlib import Path
 import logging
-import requests
 from abc import ABC, abstractmethod
+
+# Optional dependencies
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    requests = None
+    HAS_REQUESTS = False
 
 logger = logging.getLogger(__name__)
 
-# Optional dependencies
 try:
     import xarray as xr
     HAS_XARRAY = True
 except ImportError:
     xr = None
     HAS_XARRAY = False
+
 
 
 @dataclass
@@ -165,9 +172,10 @@ class INCOISProvider(MetOceanProvider):
         self.password = password
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.session = requests.Session()
-        if username and password:
+        self.session = requests.Session() if HAS_REQUESTS else None
+        if self.session and username and password:
             self.session.auth = (username, password)
+
     
     def get_currents(
         self,
@@ -181,8 +189,12 @@ class INCOISProvider(MetOceanProvider):
         
         if cache_file.exists():
             return self._load_currents_from_cache(cache_file, bbox)
+
+        if not self.session:
+            return self._get_climatology_currents(bbox)
         
         try:
+
             url = f"{self.BASE_URL}/iofs/hycom/surface/latest.nc"
             params = {
                 "lat": f"{min_lat}:{max_lat}",
@@ -296,8 +308,12 @@ class INCOISProvider(MetOceanProvider):
         
         if cache_file.exists():
             return self._load_winds_from_cache(cache_file, bbox)
+
+        if not self.session:
+            return self._get_climatology_winds(bbox)
         
         try:
+
             url = f"{self.BASE_URL}/iofs/wind/latest.nc"
             params = {
                 "lat": f"{min_lat}:{max_lat}",
@@ -546,6 +562,45 @@ class HybridProvider(MetOceanProvider):
         return self.ecmwf.get_stokes_drift(time, bbox)
 
 
+class SampleMetOceanProvider(MetOceanProvider):
+    """Deterministic offline sample MetOcean provider for Gulf of Kutch / Saurashtra."""
+
+    def get_currents(
+        self,
+        time: datetime,
+        bbox: Tuple[float, float, float, float],
+    ) -> CurrentField:
+        min_lat, min_lon, max_lat, max_lon = bbox
+        lat = np.linspace(min_lat, max_lat, 20)
+        lon = np.linspace(min_lon, max_lon, 20)
+        u = np.full((len(lat), len(lon)), -0.32)
+        v = np.full((len(lat), len(lon)), -0.18)
+        return CurrentField(
+            u=u, v=v, lat=lat, lon=lon, time=time, source="SAMPLE-INCOIS-OFFLINE"
+        )
+
+    def get_winds(
+        self,
+        time: datetime,
+        bbox: Tuple[float, float, float, float],
+    ) -> WindField:
+        min_lat, min_lon, max_lat, max_lon = bbox
+        lat = np.linspace(min_lat, max_lat, 20)
+        lon = np.linspace(min_lon, max_lon, 20)
+        u10 = np.full((len(lat), len(lon)), -4.5)
+        v10 = np.full((len(lat), len(lon)), -3.2)
+        return WindField(
+            u10=u10, v10=v10, lat=lat, lon=lon, time=time, source="SAMPLE-ECMWF-OFFLINE"
+        )
+
+    def get_stokes_drift(
+        self,
+        time: datetime,
+        bbox: Tuple[float, float, float, float],
+    ) -> CurrentField:
+        return self.get_currents(time, bbox)
+
+
 def create_metocean_provider(
     provider_type: str = "hybrid",
     **kwargs
@@ -555,10 +610,11 @@ def create_metocean_provider(
         "incois": INCOISProvider,
         "ecmwf": ECMWFProvider,
         "hybrid": HybridProvider,
+        "sample": SampleMetOceanProvider,
     }
     
     provider_class = providers.get(provider_type.lower())
     if provider_class is None:
         raise ValueError(f"Unknown provider: {provider_type}")
     
-    return provider_class(**kwargs)
+    return provider_class(**kwargs)
