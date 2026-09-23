@@ -412,7 +412,7 @@ elif page == "Settings":
     
     st.write("### System Configuration")
     st.write(f"- **Processing Node ID**: sagar-drishti-demo-node")
-    st.write(f"- **Ledger Difficulty**: 4 leading zeros (SHA-256 PoW)")
+    st.write(f"- **Ledger Architecture**: Sequential SHA-256 Hash Chain + Ed25519")
     st.write(f"- **Attribution Weights**: w1=0.35, w2=0.25, w3=0.15, w4=0.15, w5=0.10")
     st.write(f"- **Max Drift Backtrack**: 12 hours (default)")
     st.write(f"- **RK4 Step Size**: 300 seconds")

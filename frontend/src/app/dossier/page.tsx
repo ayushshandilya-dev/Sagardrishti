@@ -159,7 +159,7 @@ export default function LegalDossierPage() {
             <div className="grid grid-cols-2 gap-x-8 gap-y-0.5">
               <K k="Ledger status" v={hasVerified ? "CHAIN OF CUSTODY VERIFIED" : "Awaiting verification"} />
               <K k="Verification" v={`${evidenceChecks.filter((c) => c.verified).length}/${evidenceChecks.length} tiers`} />
-              <K k="Sealing" v="Merkle root · prev-hash chained · PoW anchored" mono={false} />
+              <K k="Sealing" v="Merkle root · sequential hash-chained · Ed25519 signed" mono={false} />
               <K k="Authority signature" v="Ed25519 · ICG surveillance key" mono={false} />
             </div>
           </SectionShell>

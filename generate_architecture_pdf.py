@@ -190,9 +190,9 @@ def build_architecture_pdf(output_path: str):
         ],
         [
             Paragraph("Stage 6", cell_body_b),
-            Paragraph("Maritime COP & Automated Courtroom Enforcement Dossier", cell_body),
-            Paragraph("MapLibre GL / Deck.gl Interactive COP, Multi-page ISO PDF/A MARPOL Dossier, Indian Evidence Act Sec. 65B Technical Attestation Clause.", cell_body),
-            Paragraph("Boarding warrant, GC-MS fuel sampling mandate, court dossier.", cell_body)
+            Paragraph("Maritime COP & Statutory Enforcement Dossier", cell_body),
+            Paragraph("MapLibre GL / Deck.gl Interactive COP, Multi-page ISO PDF/A MARPOL Dossier, Section 63 Bharatiya Sakshya Adhiniyam, 2023 (BSA) Technical Attestation.", cell_body),
+            Paragraph("Enforcement-support dossier for authorized boarding and GC-MS fuel sampling.", cell_body)
         ]
     ]
     t_summary = Table(summary_data, colWidths=[0.9 * inch, 1.8 * inch, 2.8 * inch, 1.8 * inch])
@@ -389,10 +389,10 @@ def build_architecture_pdf(output_path: str):
     ))
     elements.append(Spacer(1, 10))
 
-    elements.append(Paragraph("7. STAGE 6: MARITIME COP & SECTION 65B EVIDENCE DOSSIER", h1_style))
+    elements.append(Paragraph("7. STAGE 6: MARITIME COP & SECTION 63 BSA STATUTORY DOSSIER", h1_style))
     elements.append(Paragraph(
-        "• <b>Interactive Command Dashboard (React / Deck.gl / MapLibre)</b>: Sub-pixel SAR backscatter overlays, dynamic time slider (reverse backtrack to t₀ and forward +48h future forecast), and live suspect ranking.<br/>"
-        "• <b>Automated Section 65B MARPOL Enforcement Dossier (PDF/A)</b>: Multi-page courtroom-ready document featuring high-res forensic maps, tabular factor shares, MetOcean conditions, and a formal statutory technical attestation to support certification by a human Competent Authority under Section 65B of the Indian Evidence Act and the Bharatiya Sakshya Adhiniyam, 2023.",
+        "• <b>Interactive Command Dashboard (React / Deck.gl / MapLibre)</b>: Sub-pixel SAR backscatter overlays, dynamic time slider (reverse backtrack to t0 and forward +48h future forecast), and live suspect ranking.<br/>"
+        "• <b>Automated Section 63 BSA 2023 Enforcement Dossier (PDF/A)</b>: Multi-page document featuring high-res forensic maps, tabular factor shares, MetOcean conditions, and a formal statutory technical attestation under Section 63 of the Bharatiya Sakshya Adhiniyam, 2023 (formerly Section 65B of the Indian Evidence Act), establishing <b>probable cause</b> to support authorized interception, boarding, and physical bunker fuel sampling.",
         bullet_style
     ))
     elements.append(Spacer(1, 14))
