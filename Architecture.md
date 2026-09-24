@@ -68,7 +68,7 @@ The system is organized into six decoupled, horizontally scalable microservice t
                                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ TIER 2: HIGH-THROUGHPUT SENSOR PREPROCESSING & PHYSICAL GATING                                  │
-│  - SAR Stream: Radiometric calibration (DN -> Sigma0 dB) & 5x5 Refined Lee Speckle Filtering    │
+│  - SAR Stream: Radiometric calibration (DN -> Sigma0 dB) & 7x7 Refined Lee Speckle Filtering    │
 │  - Polarimetric Stream: ISRO RISAT-1A (EOS-04) CTLR Stokes vectors -> m-chi decomposition       │
 │  - MetOcean Inversion: CMOD5.N GMF wind speed (U10) -> Low/High Wind Gating (3.0 < U10 < 12.0)   │
 │  - Optical Verification: Sentinel-2 MSI cloud masking (QA60) -> FAI / NDWI false-positive check│

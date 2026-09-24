@@ -38,7 +38,7 @@ flowchart TD
     end
 
     subgraph STAGE1["Stage 1: Multi-Modal Ingestion & Physical Gating"]
-        A1["Sentinel-1 C-SAR IW GRD (Copernicus)"] --> B1["Radiometric Calibration & 5x5 Refined Lee Filter"]
+        A1["Sentinel-1 C-SAR IW GRD (Copernicus)"] --> B1["Radiometric Calibration & 7x7 Refined Lee Filter"]
         B1 --> B2["CMOD5.N Inversion: Calm Wind Gating (3.0 < U10 < 12.0 m/s)"]
         A2["ISRO RISAT-1A / EOS-04 (Sovereign Dual-Use)"] --> B3["Compact Polarimetry: m-chi Stokes Decomposition"]
         A3["Sentinel-2 MSI (Optional Optical Check)"] --> B4["QA60 Cloud Mask -> FAI & NDWI Verification"]
@@ -117,7 +117,7 @@ flowchart TD
 ### Stage 3: Weathering Inversion & Reverse Lagrangian Backtracking
 * **Fay Spreading & Mackay Evaporative Exposure Inversion**:
   $$F_e = \left(\frac{T_K}{1158}\right) \ln\left(1 + \frac{K_a T_e}{V_0}\right)$$
-  Inverting the observed slick thickness and weathering profile yields the temporal release window $[T_{\text{min}}, T_{\text{max}}]$ (typically $4\text{ to }8\text{ hours}$ before satellite acquisition).
+  Inverting the observed slick thickness and weathering profile yields the temporal release window $[T_{\text{min}}, T_{\text{max}}]$ (demo scene: $1.8\text{–}2.9\text{ hours}$ before satellite acquisition, $T_{\text{drift}} \approx 2.4\text{ h}$).
 * **Samuels-Allen Variable Wind Leeway**:
   $$\vec{u}_{\text{drift}} = \vec{u}_{\text{curr}} + \alpha_w \cdot \mathbf{R}[\theta(\phi)] \cdot \vec{u}_{10}$$
   Wind leeway factor $\alpha_w \in [0.030, 0.035]$. Coriolis deflection angle $\theta(\phi) = 16^\circ \sin(\phi)$ dynamically scales with latitude:

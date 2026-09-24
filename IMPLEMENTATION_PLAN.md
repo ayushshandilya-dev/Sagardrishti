@@ -32,7 +32,7 @@ flowchart TD
     end
 
     subgraph STAGE1["Stage 1: Multi-Modal Ingestion & Physical Gating"]
-        A1["Sentinel-1 C-SAR IW GRD (Copernicus)"] --> B1["Radiometric Calibration & 5x5 Refined Lee Filter"]
+        A1["Sentinel-1 C-SAR IW GRD (Copernicus)"] --> B1["Radiometric Calibration & 7x7 Refined Lee Filter"]
         B1 --> B2["CMOD5.N Inversion: Calm Wind Gating (3.0 < U10 < 12.0 m/s)"]
         A2["ISRO RISAT-1A / EOS-04 (Sovereign Dual-Use)"] --> B3["Compact Polarimetry: m-chi Stokes Decomposition"]
         A3["Sentinel-2 MSI (Optional Optical Check)"] --> B4["QA60 Cloud Mask -> FAI & NDWI Verification"]
@@ -120,7 +120,7 @@ flowchart TD
 * **Mathematical & Physical Formulations:**
   * **Fay Spreading & Mackay Evaporative Exposure Inversion:**
     $$F_e = \left(\frac{T_K}{1158}\right) \ln\left(1 + \frac{K_a T_e}{V_0}\right)$$
-    Inverts measured slick thickness and volatile loss fraction to determine temporal release window $[T_{\text{min}}, T_{\text{max}}]$ (typically 4–8 hours prior to SAR acquisition).
+    Inverts measured slick thickness and volatile loss fraction to determine temporal release window $[T_{\text{min}}, T_{\text{max}}]$ (demo scene: $1.8\text{–}2.9\text{ h}$ prior to SAR acquisition, $T_{\text{drift}} \approx 2.4\text{ h}$).
   * **Hydrodynamic Vector Ingestion:** INCOIS Ocean State Forecasts (OSF) / HYCOM $1/12^\circ$ currents ($\vec{u}_{\text{curr}}$) and NCMRWF / GFS 10m surface winds ($\vec{u}_{10}$).
   * **Samuels-Allen Variable Leeway:**
     $$\vec{u}_{\text{drift}} = \vec{u}_{\text{curr}} + \alpha_w \cdot \mathbf{R}[\theta(\phi)] \cdot \vec{u}_{10}$$
