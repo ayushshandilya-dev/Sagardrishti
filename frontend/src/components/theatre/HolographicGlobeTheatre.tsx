@@ -174,114 +174,57 @@ export const HolographicGlobeTheatre: React.FC = () => {
     controls.enablePan = false;
     controlsRef.current = controls;
 
-    // ── LIGHTING ──
-    const ambientLight = new THREE.AmbientLight(0x0e253e, 1.4);
-    scene.add(ambientLight);
-
-    const sunLight = new THREE.DirectionalLight(0xd4f0ff, 2.4);
-    sunLight.position.set(20, 15, 25);
-    scene.add(sunLight);
-
-    const blueRimLight = new THREE.DirectionalLight(0x00f0ff, 2.0);
-    blueRimLight.position.set(-25, -10, -20);
-    scene.add(blueRimLight);
-
-    // ── EARTH GLOBE WITH PROCEDURAL PHOTOREALISTIC TEXTURE ──
+    // ── AUTHENTIC NASA SATELLITE 3D EARTH (PHOTOREALISTIC EQUIRECTANGULAR MAP) ──
     const GLOBE_RADIUS = 10;
     const globeGroup = new THREE.Group();
     scene.add(globeGroup);
 
-    // Canvas procedural high-res Earth texture with rich blues, greens & desert ochres
-    const cv = document.createElement("canvas");
-    cv.width = 2048;
-    cv.height = 1024;
-    const ctx = cv.getContext("2d")!;
+    // Physically Believable Directional Sunlight (Day/Night Terminator)
+    const sunLight = new THREE.DirectionalLight(0xffffff, 2.6);
+    sunLight.position.set(30, 8, 25);
+    scene.add(sunLight);
 
-    // Deep ocean base
-    const oceanGrad = ctx.createLinearGradient(0, 0, 0, 1024);
-    oceanGrad.addColorStop(0, "#031022");
-    oceanGrad.addColorStop(0.5, "#06223e");
-    oceanGrad.addColorStop(1, "#020b18");
-    ctx.fillStyle = oceanGrad;
-    ctx.fillRect(0, 0, 2048, 1024);
+    // Deep space ambient lighting (keeps night side dark & moody)
+    const ambientLight = new THREE.AmbientLight(0x040e1c, 0.38);
+    scene.add(ambientLight);
 
-    // Drawing recognizable continents: Africa, Europe, Asia, India, Australia, Americas
-    function drawContinents() {
-      ctx.fillStyle = "#1e3924"; // lush vegetation green
-      // Africa & Middle East
-      ctx.beginPath();
-      ctx.ellipse(1080, 520, 180, 240, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Sahara Desert ochre/yellow overlay
-      ctx.fillStyle = "#a88544";
-      ctx.beginPath();
-      ctx.ellipse(1070, 420, 160, 90, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Eurasia
-      ctx.fillStyle = "#1b4028";
-      ctx.beginPath();
-      ctx.ellipse(1350, 320, 320, 140, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Indian Subcontinent (Gujarat, Saurashtra, Peninsula)
-      ctx.fillStyle = "#2a5435";
-      ctx.beginPath();
-      ctx.moveTo(1360, 420); // North India
-      ctx.lineTo(1330, 470); // Gujarat / Kutch
-      ctx.lineTo(1370, 560); // Kanyakumari south tip
-      ctx.lineTo(1420, 470); // Bay of Bengal East coast
-      ctx.closePath();
-      ctx.fill();
-      // Gujarat Thar / Kutch ochre desert highlight
-      ctx.fillStyle = "#b5944d";
-      ctx.beginPath();
-      ctx.arc(1335, 465, 25, 0, Math.PI * 2);
-      ctx.fill();
-      // Europe
-      ctx.fillStyle = "#1d472c";
-      ctx.beginPath();
-      ctx.ellipse(1050, 300, 120, 80, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Americas (West)
-      ctx.fillStyle = "#1e3b26";
-      ctx.beginPath();
-      ctx.ellipse(450, 360, 140, 150, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(550, 640, 110, 180, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Australia
-      ctx.fillStyle = "#946f33";
-      ctx.beginPath();
-      ctx.ellipse(1680, 680, 90, 70, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Swirling wispy cloud bands
-      ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
-      for (let i = 0; i < 40; i++) {
-        ctx.beginPath();
-        const cx = Math.random() * 2048;
-        const cy = 200 + Math.random() * 600;
-        ctx.ellipse(cx, cy, 80 + Math.random() * 120, 15 + Math.random() * 30, Math.PI * 0.1, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    drawContinents();
+    // Load Genuine High-Resolution NASA Blue Marble Textures
+    const textureLoader = new THREE.TextureLoader();
 
-    const earthTex = new THREE.CanvasTexture(cv);
-    const earthGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
-    const earthMat = new THREE.MeshStandardMaterial({
-      map: earthTex,
-      roughness: 0.65,
-      metalness: 0.15,
+    const earthDayMap = textureLoader.load("/textures/earth/earth_day_2048.jpg");
+    earthDayMap.colorSpace = THREE.SRGBColorSpace;
+
+    const earthNormalMap = textureLoader.load("/textures/earth/earth_normal_2048.jpg");
+    const earthSpecularMap = textureLoader.load("/textures/earth/earth_specular_2048.jpg");
+    const earthCloudsMap = textureLoader.load("/textures/earth/earth_clouds_1024.png");
+
+    // 1. Earth Sphere Mesh (SphereGeometry with Phong Specular & Normal Relief)
+    const earthGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 96, 96);
+    const earthMat = new THREE.MeshPhongMaterial({
+      map: earthDayMap,
+      normalMap: earthNormalMap,
+      normalScale: new THREE.Vector2(0.85, 0.85),
+      specularMap: earthSpecularMap,
+      specular: new THREE.Color(0x2d4f6e), // Subtle, realistic ocean sun glint
+      shininess: 18,
     });
     const earthMesh = new THREE.Mesh(earthGeo, earthMat);
     globeGroup.add(earthMesh);
 
-    // Initial orientation: Center on the Indian Ocean / Arabian Sea
-    globeGroup.rotation.y = -Math.PI * 0.42;
-    globeGroup.rotation.x = Math.PI * 0.08;
+    // 2. Realistic Orbital Cloud Layer (Separate sphere with 3D parallax)
+    const cloudGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.012, 64, 64);
+    const cloudMat = new THREE.MeshStandardMaterial({
+      map: earthCloudsMap,
+      transparent: true,
+      opacity: 0.82,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+    globeGroup.add(cloudMesh);
 
-    // Atmospheric Backscatter Glow Shell
-    const atmoGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.025, 48, 48);
+    // 3. Delicate Blue Rayleigh Atmospheric Rim
+    const atmoGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 1.026, 64, 64);
     const atmoMat = new THREE.ShaderMaterial({
       transparent: true,
       side: THREE.BackSide,
@@ -296,13 +239,17 @@ export const HolographicGlobeTheatre: React.FC = () => {
       fragmentShader: `
         varying vec3 vNormal;
         void main(){
-          float intensity = pow(0.68 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.2);
-          gl_FragColor = vec4(0.0, 0.72, 1.0, 1.0) * intensity * 1.8;
+          float intensity = pow(0.72 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.8);
+          gl_FragColor = vec4(0.18, 0.62, 1.0, 1.0) * intensity * 1.4;
         }
       `,
     });
-    const atmoMesh = new THREE.Mesh(atmoGeo, atmoMat);
-    scene.add(atmoMesh);
+    const atmosphereMesh = new THREE.Mesh(atmoGeo, atmoMat);
+    scene.add(atmosphereMesh);
+
+    // Initial orientation: Center on the Indian Ocean / Arabian Sea
+    globeGroup.rotation.y = -Math.PI * 0.42;
+    globeGroup.rotation.x = Math.PI * 0.08;
 
     // ── HOLOGRAPHIC EMITTER PEDESTAL / BASE (Matching Image 1) ──
     const pedestalGroup = new THREE.Group();
@@ -407,6 +354,9 @@ export const HolographicGlobeTheatre: React.FC = () => {
 
       // Update 3D Orbit Controls
       controls.update();
+
+      // Atmospheric cloud layer rotation (orbital parallax over Earth)
+      cloudMesh.rotation.y += 0.0003;
 
       // Rotate pedestal rings in opposing directions
       ring1.rotation.z += 0.004;
