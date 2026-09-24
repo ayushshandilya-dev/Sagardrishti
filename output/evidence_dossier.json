@@ -6,42 +6,42 @@
   "blocks": [
     {
       "index": 1,
-      "timestamp": "2026-09-23T16:59:17.802143+00:00",
+      "timestamp": "2026-09-23T18:52:22.305044+00:00",
       "merkle_root": "2b70a5d9429f1d791a48f86861d3343fec03d4aa481716e993e2a11d8b2d16d1",
       "attribution_matrix": {
         "sarCalibrationVerified": 1.0,
         "speckleLeeFilterApplied": 1.0
       },
-      "prev_block_hash": "3dc0ac9ff76948a3b3d504b084065ddcc98d7cd2a9015cb0dd2cd3821545ef6c",
-      "block_hash": "feb975ed699d52108601f6e99fc082ac10b33e4c840daa857be6f453ba77b2a8",
+      "prev_block_hash": "9781a58f74f26f2a8ea6c2c167113813e73d0042794f21cbfe4ad2633d219545",
+      "block_hash": "2e2c1a6fa31f6c37508ed593ce7991490c4e5b0c95380200f1d56f9d2ff6e0bc",
       "nonce": 0
     },
     {
       "index": 2,
-      "timestamp": "2026-09-23T16:59:17.803438+00:00",
+      "timestamp": "2026-09-23T18:52:22.306435+00:00",
       "merkle_root": "97224faed4806db32b748745022d96c086a409bf107ec305b25cad9e9c596105",
       "attribution_matrix": {
         "aisDeduplicated": 1.0
       },
-      "prev_block_hash": "feb975ed699d52108601f6e99fc082ac10b33e4c840daa857be6f453ba77b2a8",
-      "block_hash": "d2811a55c3871b00a0fcce2d3160457251f9b2ce9a7c7effc53bc9c155e63c2a",
+      "prev_block_hash": "2e2c1a6fa31f6c37508ed593ce7991490c4e5b0c95380200f1d56f9d2ff6e0bc",
+      "block_hash": "7bdae953cf74cdef75ba170f4aea4e5d552a214ef3eb04b5327d4c5a7afcca4e",
       "nonce": 0
     },
     {
       "index": 3,
-      "timestamp": "2026-09-23T16:59:17.807590+00:00",
+      "timestamp": "2026-09-23T18:52:22.307880+00:00",
       "merkle_root": "ad15c9f4d0119bb473bb6ce4925f1b292545a6231bff19b83944fcc99a947a01",
       "attribution_matrix": {
         "incoisCurrentsValidated": 1.0,
         "ecmwfWindsInterpolated": 1.0
       },
-      "prev_block_hash": "d2811a55c3871b00a0fcce2d3160457251f9b2ce9a7c7effc53bc9c155e63c2a",
-      "block_hash": "58510aa854b87608c091b47e6e409e7af884c71f9e3e65828b34e82b2f2650ed",
+      "prev_block_hash": "7bdae953cf74cdef75ba170f4aea4e5d552a214ef3eb04b5327d4c5a7afcca4e",
+      "block_hash": "dfca8b39240681a160cb29f81e088e1e68cdd052afe8e0fd6c7696b185bc1f3e",
       "nonce": 0
     },
     {
       "index": 4,
-      "timestamp": "2026-09-23T16:59:17.808924+00:00",
+      "timestamp": "2026-09-23T18:52:22.309317+00:00",
       "merkle_root": "f07bbd4b43db98dffdc7d1519004e545796c91ae6dff6b994abc9f4dfdc34495",
       "attribution_matrix": {
         "backtrackProximityScore": 0.962,
@@ -50,8 +50,8 @@
         "kineticAnomalyScore": 0.885,
         "temporalPlausibilityScore": 1.0
       },
-      "prev_block_hash": "58510aa854b87608c091b47e6e409e7af884c71f9e3e65828b34e82b2f2650ed",
-      "block_hash": "d2f9f1b7dd0d84dc0f47c789b7d9ebc9d888ec751c3ae0764cba9aba2847ba85",
+      "prev_block_hash": "dfca8b39240681a160cb29f81e088e1e68cdd052afe8e0fd6c7696b185bc1f3e",
+      "block_hash": "75ec351faab50bb24766434ae62be28ecc34e6c850d8050fdbedc03e39c6f08a",
       "nonce": 0
     }
   ],
@@ -155,5 +155,5 @@
       }
     ]
   },
-  "generated_at": "2026-09-23T16:59:17.895919+00:00"
+  "generated_at": "2026-09-23T18:52:22.376829+00:00"
 }

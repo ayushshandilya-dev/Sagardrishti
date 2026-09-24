@@ -1,9 +1,15 @@
 # Sagar-Drishti stack
-#   docker compose up -d                   # API + Postgres + Streamlit dashboard
-#   docker compose --profile full up -d    # + web console on :3000
+#   docker compose up -d                   # API + Postgres + Streamlit analyst dashboard
+#   docker compose --profile full up -d    # + Next.js ops COP on :3000
 #
 # The API runs against a real PostgreSQL store (seeded automatically on boot).
-# Override secrets:  docker compose up -e POSTGRES_PASSWORD=...   or a .env file.
+#
+# REQUIRED env vars (set via .env file or shell export):
+#   POSTGRES_PASSWORD     — Postgres password
+#   NODE_SIGNING_KEY      — 64 hex chars (generate: openssl rand -hex 32)
+#   CORS_ORIGINS          — e.g. https://<project>.vercel.app (wildcard * is rejected in production)
+#
+# If any are missing, the API will refuse to start (validate_production guard).
 
 services:
   # Postgres store — the source of truth for incidents, vessels, evidence ledger,
@@ -32,15 +38,16 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql+psycopg://sagar_user:${POSTGRES_PASSWORD:-sagar_secure_pw}@postgres:5432/sagar_drishti
-      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - CORS_ORIGINS=${CORS_ORIGINS}
       - API_ENV=production
-      - NODE_SIGNING_KEY=${NODE_SIGNING_KEY:-0101010101010101010101010101010101010101010101010101010101010101}
+      - NODE_SIGNING_KEY=${NODE_SIGNING_KEY}
       - PYTHONUNBUFFERED=1
     depends_on:
       postgres:
         condition: service_healthy
 
-  # Streamlit Dashboard
+  # Streamlit Analyst Dashboard — rapid visual forensics (attribution breakdown,
+  # drift trajectories, evidence chain explorer). Separate from the Next.js ops COP.
   dashboard:
     build:
       context: .

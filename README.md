@@ -5,7 +5,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com)
 [![Next.js 14](https://img.shields.io/badge/Next.js-14.2-black.svg)](https://nextjs.org/)
 [![Deck.gl](https://img.shields.io/badge/Deck.gl-9.0-green.svg)](https://deck.gl)
-[![Tests Passing](https://img.shields.io/badge/tests-69%2F69%20passed-brightgreen.svg)]()
+[![Tests Passing](https://img.shields.io/badge/tests-81%2F81%20passed-brightgreen.svg)]()
 [![SIH Problem Statement](https://img.shields.io/badge/SIH-SIH26143-orange.svg)]()
 [![Evidence Standard](https://img.shields.io/badge/Sec%2065B-IEA%20%2F%20BSA%202023-purple.svg)]()
 
@@ -184,6 +184,9 @@ flowchart TD
 │   ├── src/components/map/      # Deck.gl + MapLibre GL 3D maritime visualization layers
 │   └── src/lib/                 # Live API client with automatic cached mock fallback
 │
+├── dashboard/                   # Streamlit Analyst Dashboard (rapid forensics & attribution explorer)
+│   └── app.py                   # Visual forensic attribution breakdown, drift plot, evidence chain
+│
 ├── data/                        # Bundled high-fidelity maritime validation datasets
 │   └── sample_scenes.py         # Sentinel-1 scenes, AIS corridors, and MetOcean snapshots
 │
@@ -192,8 +195,13 @@ flowchart TD
 │   ├── evidence_dossier.json    # Canonical JSON evidence bundle
 │   └── ledger_chain.json        # Append-only cryptographic blockchain ledger
 │
-└── tests/                       # Complete Pytest Verification Suite (69 test cases)
+└── tests/                       # Complete Pytest Verification Suite (81 test cases)
 ```
+
+> **Data Storage Architecture**: The system uses three distinct storage layers, each chosen for its specific integrity guarantees:
+> * **Evidence Ledger** — an append-only JSONL file (`output/ledger_chain.json`) for tamper-evident chain-of-custody. No database involved; raw sequential append ensures no in-place mutation is ever possible.
+> * **Incident/Vessel Metadata** — SQLite (`data/sagar_drishti.db`) for zero-configuration local demo; Postgres 16 in the `docker-compose.yml` production profile. Alembic migrations manage schema versioning across both backends.
+> * **Streamlit Analyst Dashboard** (`dashboard/app.py` on port 8501) — a rapid visual forensics tool for investigators to interactively explore attribution factor breakdowns, drift trajectories, and evidence chain integrity. This is separate from the **Next.js/Deck.gl/MapLibre COP** (port 3000), which serves as the operational real-time command picture.
 
 ---
 
@@ -228,7 +236,7 @@ python main.py pipeline
 ```bash
 python -m pytest tests/ -v
 ```
-*Runs all 69 test cases verifying mathematical, physical, and cryptographic assertions.*
+*Runs all 81 test cases verifying mathematical, physical, and cryptographic assertions.*
 
 #### 4. Launch the FastAPI Backend
 ```bash

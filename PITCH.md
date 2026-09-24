@@ -22,7 +22,7 @@ It is wrapped in a working command center (Next.js 14 + Deck.gl / MapLibre) that
 ## Why it wins a demo, not just a deck
 
 - **It runs.** Two commands (`python main.py api`, `npm run dev`) — the DATA LIVE chip flips green as the console hydrates from the live API. Kill the API and it degrades gracefully to cached scenes.
-- **It's testable.** 69 pytest cases across all 6 stages (CMOD5.N, compact polarimetry, cascade CFAR, SegFormer/DeepLab, RK4, attribution, and ledger), all green.
+- **It's testable.** 81 pytest cases across all 6 stages (CMOD5.N, compact polarimetry, cascade CFAR, SegFormer/DeepLab, RK4, attribution, and ledger), all green.
 - **It's forgery-proof.** Tamper with one block or byte and the evidence page immediately flags chain invalidity. That's the whole legal argument, demonstrated live.
 - **It's extensible.** Open Sentinel-1 baseline is coupled with an ISRO RISAT-1A (EOS-04) sovereign dual-use adapter ($m\text{--}\chi$ polarimetry).
 
@@ -30,12 +30,12 @@ It is wrapped in a working command center (Next.js 14 + Deck.gl / MapLibre) that
 
 | Claim | Value |
 |---|---|
-| Attribution top-candidate | MV COASTAL DEFENDER-IV (MMSI: 419001234) |
-| Bayesian Dirichlet Posterior | 76.5 % (Linear Confidence: 93.2%) |
+| Attribution top-candidate | MT OCEAN PIONEER (MMSI: 419001234) |
+| Bayesian Dirichlet Posterior | 76.1 % (Linear Confidence: 93.2%) |
 | Physical Reconciled Kernel | $\sigma_{\text{kernel}} \approx 233.4\text{ m}$ (CPA = 143 m) |
-| Meaningful cell size at 150 m | RK4 step = 300 s, backtrack to 12 h |
-| Evidence chain | 5 blocks, sequential SHA-256 hash-chained, Ed25519-signed |
-| Test coverage | 69 Python automated tests, all green |
+| RK4 Lagrangian Advection | Step = 300 s, backtrack horizon = 12 h |
+| Evidence chain | Sequential SHA-256 hash-chained blocks, Ed25519-signed |
+| Test coverage | 81 Python automated tests, all green |
 
 ## Single next step for production
 

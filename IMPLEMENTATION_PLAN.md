@@ -10,7 +10,7 @@
 SAGARDRISHTI is an end-to-end autonomous maritime surveillance, backtracking, and forensic attribution platform designed to detect illegal bilge and slop discharges (MARPOL 73/78 Annex I), reconstruct reverse drift trajectories under real oceanographic conditions, isolate suspect vessels using multi-source spatiotemporal kinematics, and seal judicial evidence in a tamper-evident cryptographic ledger compliant with Section 65B of the Indian Evidence Act / Bharatiya Sakshya Adhiniyam, 2023.
 
 ### Current Implementation Status
-* **Test Suite:** 69/69 automated tests passing in ~3.8 seconds (`pytest tests/ -v`).
+* **Test Suite:** 81/81 automated tests passing (`pytest tests/ -v`).
 * **CLI Pipeline:** `python main.py pipeline` executes all 6 stages end-to-end, writing:
   * `output/evidence_dossier.pdf` (statutory forensic dossier)
   * `output/evidence_dossier.json` (canonical JSON evidence bundle)
@@ -173,7 +173,7 @@ flowchart TD
 ```powershell
 python -m pytest tests/ -v
 ```
-* Coverage: 69 test cases across SAR preprocessing, CMOD5.N, EOS-04 adapter, cascade CFAR, SegFormer/DeepLab detection, Fay-Mackay weathering, RK4 drift, AIS interpolation, Bayesian attribution, and tamper-evident ledger integrity.
+* Coverage: 81 test cases across SAR preprocessing, CMOD5.N, EOS-04 adapter, cascade CFAR, SegFormer/DeepLab detection, Fay-Mackay weathering, RK4 drift, AIS interpolation, Bayesian attribution, and tamper-evident ledger integrity.
 
 ### End-to-End Pipeline Execution
 ```powershell
