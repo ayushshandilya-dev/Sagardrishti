@@ -23,3 +23,5 @@ data/*.db
 # Misc
 *.log
 *.pdf
+.vercel
+.env*
