@@ -114,7 +114,67 @@ SEALED SHA-256 PROOF: e8f4a298...91c2 (Indian Coast Guard Authenticated)`;
       return;
     }
 
-    // Trigger synthetic file download for PDF / PNG / GeoJSON
+    if (format === "PDF_SLIDE") {
+      const backendUrl = "http://localhost:8000/api/v1/evidence/dossier/pdf";
+      fetch(backendUrl)
+        .then((res) => {
+          if (!res.ok) throw new Error("Backend response error");
+          return res.blob();
+        })
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `SAGAR_DRISHTI_STAGE_${comparison.stageNumber}_DOSSIER.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          setDownloading(false);
+          setDownloadComplete(true);
+          setTimeout(() => onClose(), 1500);
+        })
+        .catch(() => {
+          // Graceful fallback: render printable document window
+          const printWindow = window.open("", "_blank");
+          if (printWindow) {
+            printWindow.document.write(`
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <title>SAGAR-DRISHTI — STAGE ${comparison.stageNumber} DOSSIER</title>
+                  <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px; color: #111; line-height: 1.6; }
+                    .header { border-bottom: 2px solid #004080; padding-bottom: 12px; margin-bottom: 24px; }
+                    .title { font-size: 20px; font-weight: bold; color: #004080; }
+                    .meta { font-size: 12px; color: #666; font-family: monospace; }
+                    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-top: 20px; }
+                    pre { white-space: pre-wrap; font-family: inherit; font-size: 13px; }
+                  </style>
+                </head>
+                <body>
+                  <div class="header">
+                    <div class="title">SAGAR-DRISHTI MARITIME INTELLIGENCE PLATFORM</div>
+                    <div class="meta">INDIAN COAST GUARD · MARPOL ANNEX I FORENSIC ATTRIBUTION DOSSIER</div>
+                  </div>
+                  <h3>STAGE ${comparison.stageNumber}: ${comparison.title}</h3>
+                  <div class="card">
+                    <pre>${judgeCaptionContent}</pre>
+                  </div>
+                  <script>window.onload = function() { window.print(); };</script>
+                </body>
+              </html>
+            `);
+            printWindow.document.close();
+          }
+          setDownloading(false);
+          setDownloadComplete(true);
+          setTimeout(() => onClose(), 1500);
+        });
+      return;
+    }
+
+    // Trigger synthetic file download for GeoJSON / Markdown notes
     setTimeout(() => {
       let content = "";
       let mimeType = "application/json";
@@ -150,7 +210,7 @@ SEALED SHA-256 PROOF: e8f4a298...91c2 (Indian Coast Guard Authenticated)`;
         );
       } else {
         content = judgeCaptionContent;
-        mimeType = "text/plain";
+        mimeType = "text/markdown";
       }
 
       const blob = new Blob([content], { type: mimeType });

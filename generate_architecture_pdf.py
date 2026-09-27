@@ -191,7 +191,7 @@ def build_architecture_pdf(output_path: str):
         [
             Paragraph("Stage 6", cell_body_b),
             Paragraph("Maritime COP & Statutory Enforcement Dossier", cell_body),
-            Paragraph("MapLibre GL / Deck.gl Interactive COP, Multi-page ISO PDF/A MARPOL Dossier, Section 63 Bharatiya Sakshya Adhiniyam, 2023 (BSA) Technical Attestation.", cell_body),
+            Paragraph("Next.js 15 + MapLibre GL JS v6.x Common Operating Picture (ESRI Satellite + Vector Layers, Orbital-to-Tactical Zoom), Section 65B IEA / Section 63 BSA Technical Attestation Dossier.", cell_body),
             Paragraph("Enforcement-support dossier for authorized boarding and GC-MS fuel sampling.", cell_body)
         ]
     ]

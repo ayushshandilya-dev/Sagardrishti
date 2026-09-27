@@ -17,18 +17,19 @@ export const LayerChip: React.FC<LayerChipProps> = ({
     <button
       onClick={onToggle}
       aria-pressed={active}
-      className={`pointer-events-auto rounded-md px-2.5 py-1 font-mono text-[10px] font-medium transition-colors duration-150 focus-ring ${
-        active ? "text-ink" : "text-ink-faint hover:text-ink-dim"
+      className={`pointer-events-auto flex items-center gap-1.5 rounded-md px-2 py-0.5 font-mono text-[10px] font-medium transition-all duration-150 border ${
+        active
+          ? "bg-bg-2 text-ink border-line shadow-xs"
+          : "text-ink-faint border-transparent hover:text-ink hover:bg-bg-2/50"
       }`}
-      style={active ? { boxShadow: `inset 0 0 0 1px ${color}44`, color } : { color }}
     >
       <span
-        className={`mr-1 inline-block h-1 w-1 rounded-full transition-opacity ${
-          active ? "opacity-100" : "opacity-0"
+        className={`h-1.5 w-1.5 rounded-full transition-opacity ${
+          active ? "opacity-100" : "opacity-30"
         }`}
         style={{ background: color }}
       />
-      {label}
+      <span>{label}</span>
     </button>
   );
 };

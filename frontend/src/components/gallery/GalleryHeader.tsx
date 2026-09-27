@@ -48,27 +48,27 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
   return (
     <header className="h-16 shrink-0 z-40 select-none flex items-center justify-between gap-4 border-b border-line bg-bg-1 px-4">
       {/* Title & Subtitle */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber/40 bg-amber/10 shadow-[0_0_12px_rgba(214,168,79,0.15)]">
-          <Sparkles className="h-5 w-5 text-amber animate-pulse" />
+      <div className="flex items-center gap-3 shrink-0">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-amber/40 bg-amber/10 shadow-[0_0_12px_rgba(214,168,79,0.15)]">
+          <Sparkles className="h-4 w-4 text-amber" />
         </div>
         <div className="leading-tight">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold tracking-tight text-ink font-sans">
+            <h1 className="text-base font-semibold tracking-tight text-ink font-sans">
               Explainability Gallery
             </h1>
-            <span className="px-2 py-0.5 rounded border border-amber/40 bg-amber/10 text-[10px] font-mono font-semibold text-amber">
-              JUDGE PRESENTATION MODE
+            <span className="px-1.5 py-0.5 rounded border border-amber/40 bg-amber/10 text-[9px] font-mono font-semibold text-amber">
+              JUDGE MODE
             </span>
           </div>
-          <p className="text-xs text-ink-dim font-sans mt-0.5">
-            Visual evidence showing every stage of the maritime investigation.
+          <p className="text-[11px] text-ink-dim font-sans mt-0.5">
+            Visual evidence across all stages of the maritime investigation.
           </p>
         </div>
       </div>
 
-      {/* Middle Quick Search Bar */}
-      <div className="hidden md:flex items-center gap-2 max-w-xs w-full">
+      {/* Middle Quick Search Bar (visible on wider screens) */}
+      <div className="hidden xl:flex items-center gap-2 max-w-xs w-full">
         <div className="relative w-full">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-faint" />
           <input

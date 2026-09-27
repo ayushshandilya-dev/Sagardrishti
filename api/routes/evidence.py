@@ -65,6 +65,68 @@ async def export_evidence_dossier() -> Response:
     return build_export_package()
 
 
+@router.get("/dossier/pdf")
+async def download_dossier_pdf() -> Any:
+    """Download the official Section 65B forensic PDF/A dossier."""
+    import os
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    from fastapi import HTTPException
+
+    pdf_path = Path("output/evidence_dossier.pdf")
+    if not pdf_path.exists():
+        # Auto-compile if not already on disk
+        try:
+            from data.sample_scenes import SAMPLE_SCENE_1, MOCK_METOCEAN
+            from core.evidence.ledger import EvidenceDossierGenerator
+            from api.forensics import build_evidence_manifest
+
+            manifest = build_evidence_manifest()
+            pdf_path.parent.mkdir(parents=True, exist_ok=True)
+            EvidenceDossierGenerator.generate_dossier(
+                event_id=SAMPLE_SCENE_1["eventId"],
+                sar_image_path="sentinel1/SD-2026-00421",
+                spill_geometry=SAMPLE_SCENE_1["spillGeometry"],
+                backtrack_origin={"latitude": 21.8549, "longitude": 69.0617, "discharge_time": 2.4},
+                candidate_vessels=[
+                    {
+                        "mmsi": 419001234,
+                        "vessel_name": "MT OCEAN PIONEER",
+                        "vessel_type": "OIL_TANKER",
+                        "attributionScore": 0.932,
+                        "dirichletPosteriorProbability": 0.761,
+                        "factorBreakdown": {
+                            "backtrackProximityScore": 0.828,
+                            "trajectoryCollinearityScore": 1.0,
+                            "vesselPriorScore": 0.90,
+                            "kineticAnomalyScore": 0.885,
+                            "temporalPlausibilityScore": 0.95,
+                        },
+                    }
+                ],
+                attribution_data={
+                    "ledger_data": {
+                        "merkle_root": manifest.get("merkleRoot", ""),
+                        "block_height": 5,
+                        "prev_block_hash": "genesis",
+                        "ed25519_signature": manifest.get("signatureEd25519", ""),
+                    },
+                    "system_hostname": "icg-sagar-drishti-node-01",
+                    "software_version_hash": "sagar-drishti-v7",
+                },
+                met_ocean_conditions=MOCK_METOCEAN,
+                output_path=str(pdf_path),
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Dossier PDF could not be compiled: {exc}")
+
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        filename="SAGAR_DRISHTI_SECTION_65B_DOSSIER.pdf",
+    )
+
+
 @router.post("/verify")
 async def verify_integrity() -> dict[str, Any]:
     """Execute complete cryptographic verification sequence across all tiers."""

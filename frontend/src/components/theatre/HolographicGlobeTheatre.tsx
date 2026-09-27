@@ -603,25 +603,21 @@ export const HolographicGlobeTheatre: React.FC = () => {
 
         {/* Telemetry Numbers Grid */}
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-mono">
-          <div className="flex items-center justify-between rounded-lg bg-bg-2/80 p-2 border border-line">
-            <span className="text-ink-dim text-[10px]">CRITICAL</span>
+          <div className="flex items-center justify-between rounded-lg bg-bg-2/80 p-2.5 border border-line">
+            <span className="text-ink-dim text-[11px]">CRITICAL</span>
             <span className="text-red font-black text-sm">73</span>
-            <span className="text-red font-mono text-[10px]">778.37.29</span>
           </div>
-          <div className="flex items-center justify-between rounded-lg bg-bg-2/80 p-2 border border-line">
-            <span className="text-ink-dim text-[10px]">HIGH</span>
+          <div className="flex items-center justify-between rounded-lg bg-bg-2/80 p-2.5 border border-line">
+            <span className="text-ink-dim text-[11px]">HIGH</span>
             <span className="text-amber font-black text-sm">30</span>
-            <span className="text-amber font-mono text-[10px]">80.58.89</span>
           </div>
-          <div className="flex items-center justify-between rounded-lg bg-bg-2/80 p-2 border border-line">
-            <span className="text-ink-dim text-[10px]">MONITORED</span>
+          <div className="flex items-center justify-between rounded-lg bg-bg-2/80 p-2.5 border border-line">
+            <span className="text-ink-dim text-[11px]">MONITORED</span>
             <span className="text-teal font-black text-sm">86</span>
-            <span className="text-teal font-mono text-[10px]">1.69.95</span>
           </div>
-          <div className="flex items-center justify-between rounded-lg bg-bg-2/80 p-2 border border-line">
-            <span className="text-ink-dim text-[10px]">INTERCEPT</span>
+          <div className="flex items-center justify-between rounded-lg bg-bg-2/80 p-2.5 border border-line">
+            <span className="text-ink-dim text-[11px]">INTERCEPT</span>
             <span className="text-cyan font-black text-sm">23</span>
-            <span className="text-cyan font-mono text-[10px]">59.95.39</span>
           </div>
         </div>
 

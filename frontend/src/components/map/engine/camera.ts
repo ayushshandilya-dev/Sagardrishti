@@ -16,6 +16,24 @@ export interface CameraPose {
   curve?: number;
 }
 
+export const GLOBAL_ORBIT: CameraPose = {
+  center: [68.5, 20.0],
+  zoom: 2.4,
+  pitch: 0,
+  bearing: 0,
+  duration: 2800,
+  curve: 1.5,
+};
+
+export const TACTICAL_COP: CameraPose = {
+  center: [69.112, 21.845],
+  zoom: 8.5,
+  pitch: 25,
+  bearing: -5,
+  duration: 2800,
+  curve: 1.4,
+};
+
 export const THEATRE_OVERVIEW: CameraPose = {
   center: [69.2, 22.0],
   zoom: 7.6,

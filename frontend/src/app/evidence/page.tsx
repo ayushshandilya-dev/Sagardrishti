@@ -56,12 +56,26 @@ export default function EvidenceLedgerPage() {
               dot={false}
               icon={<Fingerprint className="h-3 w-3" />}
             />
-            <StatusBadge
-              label={isExporting ? "EXPORTING…" : "EXPORT PACKAGE"}
-              tone="info"
-              dot={false}
-              icon={isExporting ? <PackageCheck className="h-3 w-3 animate-pulse" /> : <Download className="h-3 w-3" />}
-            />
+            <button
+              onClick={exportEvidencePackage}
+              disabled={isExporting}
+              className="inline-flex items-center gap-1.5 rounded-md bg-bg-2 px-2.5 py-1 text-xs font-mono font-medium text-ink border border-line hover:border-line-active hover:bg-bg-1 transition active:scale-95 disabled:opacity-50"
+              title="Download JSON cryptographic manifest"
+            >
+              {isExporting ? <PackageCheck className="h-3.5 w-3.5 animate-pulse text-aqua" /> : <Download className="h-3.5 w-3.5 text-aqua" />}
+              <span>{isExporting ? "EXPORTING…" : "EXPORT JSON"}</span>
+            </button>
+            <a
+              href="http://localhost:8000/api/v1/evidence/dossier/pdf"
+              download="SAGAR_DRISHTI_SECTION_65B_DOSSIER.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-aqua/15 px-2.5 py-1 text-xs font-mono font-semibold text-aqua border border-aqua/30 transition hover:bg-aqua/25 active:scale-95"
+              title="Download official Section 65B Court-Admissible PDF Dossier"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>DOSSIER (PDF)</span>
+            </a>
           </>
         }
       />

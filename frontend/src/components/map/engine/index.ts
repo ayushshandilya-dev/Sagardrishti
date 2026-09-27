@@ -67,6 +67,8 @@ export {
   focusOnVessel,
   focusOnSpill,
   THEATRE_OVERVIEW,
+  GLOBAL_ORBIT,
+  TACTICAL_COP,
   DEMO_STAGE_POSES,
   type CameraPose,
 } from "./camera";

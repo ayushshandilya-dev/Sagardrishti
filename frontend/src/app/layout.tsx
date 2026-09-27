@@ -42,7 +42,6 @@ export default function RootLayout({
         <Bootstrap />
         <CommandPalette />
         <TopBar />
-        <DemoChoreographerBanner />
         <StatusStrip />
         <div className="flex flex-1 overflow-hidden">
           <CommandRail />

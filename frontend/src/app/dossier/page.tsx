@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   MapPin,
   Printer,
+  Download,
 } from "lucide-react";
 
 const SectionShell: React.FC<{
@@ -63,13 +64,25 @@ export default function LegalDossierPage() {
         badge={{ label: `CASE ${incident.eventId}`, tone: "neutral" }}
         subtitle="Official case file · s.356 Merchant Shipping Act, 1958 · marine pollution"
         right={
-          <TacticalButton
-            variant="secondary"
-            icon={Printer}
-            onClick={() => setEnvelope((v) => !v)}
-          >
-            {envelope ? "Hide report" : "Open report"}
-          </TacticalButton>
+          <div className="flex items-center gap-2">
+            <a
+              href="http://localhost:8000/api/v1/evidence/dossier/pdf"
+              download="SAGAR_DRISHTI_SECTION_65B_DOSSIER.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-aqua/15 px-3 py-1.5 font-mono text-xs font-semibold text-aqua border border-aqua/30 shadow-sm transition hover:bg-aqua/25 active:scale-95"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download Official PDF Dossier
+            </a>
+            <TacticalButton
+              variant="secondary"
+              icon={Printer}
+              onClick={() => setEnvelope((v) => !v)}
+            >
+              {envelope ? "Hide report" : "Open report"}
+            </TacticalButton>
+          </div>
         }
       />
 

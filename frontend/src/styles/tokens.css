@@ -1,41 +1,66 @@
 :root {
-  /* ── SURFACES ─────────────────────────────────────────────── */
-  --bg-0: #050B11;          /* deepest command backdrop          */
-  --bg-1: #07141D;          /* primary surface                   */
-  --bg-2: #0B1720;          /* elevated surface                  */
-  --panel: #0D1A23;         /* card / panel face                 */
-  --panel-hover: #10222D;   /* panel interaction face            */
+  /* ── HUMAN-CRAFTED MARITIME DARK (Charcoal Slate Command Deck) ─ */
+  --bg-0: #12151C;          /* neutral dark charcoal, zero electric blue tint */
+  --bg-1: #1A1E26;          /* tactile graphite card & header surface       */
+  --bg-2: #222733;          /* elevated button & tab surface               */
+  --panel: #1A1E26;         /* card face                                   */
+  --panel-hover: #262C3A;   /* card hover                                  */
 
   /* ── BORDERS ──────────────────────────────────────────────── */
-  --line: #152934;          /* resting hairline (soft, low-opacity) */
-  --line-active: #23506a;   /* focused / selected hairline           */
+  --line: #2C3240;          /* delicate hairline slate border, no neon    */
+  --line-active: #38BDF8;   /* focused marine accent                       */
 
   /* ── TEXT ─────────────────────────────────────────────────── */
-  --ink: #E8F0F3;           /* primary text                      */
-  --ink-dim: #96AAB4;       /* secondary text                    */
-  --ink-faint: #6B7F8C;     /* muted metadata                    */
+  --ink: #F1F5F9;           /* crisp off-white primary text                */
+  --ink-dim: #94A3B8;       /* soft neutral slate secondary text           */
+  --ink-faint: #64748B;     /* readable muted metadata                     */
 
-  /* ── OPERATIONAL COLOR ────────────────────────────────────── */
-  --aqua: #38BDF8;          /* AIS / geospatial data             */
-  --teal: #22D3A7;          /* live sensor telemetry             */
-  --amber: #D6A84F;         /* hydrocarbon / oil slick           */
-  --red: #EF4444;           /* critical incident                 */
-  --green: #22C55E;         /* VERIFIED (operational truth only) */
-  --orange: #F59E0B;        /* elevated warning                  */
+  /* ── OPERATIONAL ACCENTS (Natural Maritime Defense Colors) ─── */
+  --aqua: #38BDF8;          /* clean ocean telemetry                       */
+  --teal: #14B8A6;          /* calm sensor telemetry                       */
+  --amber: #F59E0B;         /* slick / hydrocarbon alert                   */
+  --red: #EF4444;           /* critical incident                           */
+  --green: #10B981;         /* verified state                              */
+  --orange: #F97316;        /* elevated warning                            */
 
-  /* ── RADII ────────────────────────────────────────────────── */
-  --radius-panel: 16px;
-  --radius-control: 10px;
-  --radius-chip: 6px;
+  /* ── RADII & SHADOWS (Clean software, zero artificial glow) ─ */
+  --radius-panel: 10px;
+  --radius-control: 6px;
+  --radius-chip: 4px;
 
-  /* ── SHADOWS ──────────────────────────────────────────────── */
-  --shadow-panel: 0 1px 2px rgba(2, 6, 10, 0.2), 0 8px 22px rgba(2, 6, 10, 0.16);
-  --shadow-float: 0 2px 10px rgba(2, 6, 10, 0.3);
-  --shadow-inlay: inset 0 1px 0 rgba(232, 240, 243, 0.02);
+  --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.18);
+  --shadow-float: 0 6px 20px rgba(0, 0, 0, 0.35);
+  --shadow-inlay: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
-  /* ── TYPOGRAPHY ───────────────────────────────────────────── */
   --font-inter: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-jbm: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ── HUMAN-CRAFTED MARITIME LIGHT (Daylight Operations Room) ── */
+[data-theme="light"], .light {
+  --bg-0: #F4F6F9;          /* clean daylight command deck                 */
+  --bg-1: #FFFFFF;          /* pure white card & header surface            */
+  --bg-2: #EBF0F5;          /* soft neutral button & tag surface           */
+  --panel: #FFFFFF;         /* card face                                   */
+  --panel-hover: #F1F5F9;   /* card hover                                  */
+
+  --line: #DFE4EA;          /* delicate, soft neutral border (subtle 1px)  */
+  --line-active: #0284C7;   /* focused marine blue                         */
+
+  --ink: #0F172A;           /* deep slate typography                       */
+  --ink-dim: #475569;       /* secondary text                              */
+  --ink-faint: #64748B;     /* muted text                                  */
+
+  --aqua: #0284C7;          /* nautical ocean blue                         */
+  --teal: #0D9488;          /* verified sensor telemetry                   */
+  --amber: #D97706;         /* hydrocarbon warning                         */
+  --red: #DC2626;           /* alert red                                   */
+  --green: #059669;         /* verified status                             */
+  --orange: #EA580C;        /* advisory notice                             */
+
+  --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-float: 0 4px 14px rgba(0, 0, 0, 0.08);
+  --shadow-inlay: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 /* ── DATA-DENSE SCROLLBARS ────────────────────────────────── */

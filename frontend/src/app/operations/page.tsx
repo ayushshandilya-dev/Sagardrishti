@@ -26,7 +26,7 @@ export default function OperationsPage() {
   const kpiPulse = detectionPhase && dm >= 4000 && dm < 7200;
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4 pb-3">
+    <div className="flex h-full flex-col gap-2.5 p-3 pb-2">
       <PageHeader
         title="Operations"
         eyebrow="INDIAN OCEAN COASTAL WATCH"
@@ -44,7 +44,7 @@ export default function OperationsPage() {
       />
 
       {/* 4 KPI cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-2.5">
         <div className="relative">
           <KpiCard
             label="Active incidents"

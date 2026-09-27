@@ -13,6 +13,8 @@ import {
   Activity,
   Search,
   Globe,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { useCommandStore } from "@/lib/store";
 import { bootstrapApp } from "@/lib/bootstrap";
@@ -36,6 +38,30 @@ export const TopBar: React.FC = () => {
     useCommandStore();
 
   const [latency, setLatency] = useState(42);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    const saved = (localStorage.getItem("sagar_theme") as "dark" | "light") || "dark";
+    setTheme(saved);
+    document.documentElement.setAttribute("data-theme", saved);
+    if (saved === "light") {
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    localStorage.setItem("sagar_theme", next);
+    document.documentElement.setAttribute("data-theme", next);
+    if (next === "light") {
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+    }
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setNow(new Date()), 0);
@@ -87,22 +113,10 @@ export const TopBar: React.FC = () => {
           </div>
         </div>
 
-        <div className="mx-1 h-6 w-px bg-line" />
-
-        {/* Mission status */}
-        <div className="hidden xl:flex items-center gap-2">
-          <StatusBadge label="Mission Nominal" tone="ok" pulse />
-          <StatusBadge
-            label="DEFCON"
-            tone="warn"
-            dot={false}
-            index={2}
-          />
-        </div>
       </div>
 
-      {/* Telemetry cluster */}
-      <div className="hidden lg:flex items-center gap-2.5">
+      {/* Telemetry cluster (visible on widescreen) */}
+      <div className="hidden 2xl:flex items-center gap-2.5">
         <PassChip
           icon={<Satellite className="h-3.5 w-3.5 text-aqua" />}
           label="Sentinel-1A"
@@ -122,10 +136,29 @@ export const TopBar: React.FC = () => {
       </div>
 
       {/* Right cluster */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2">
+        {/* Light / Dark Mode Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="flex items-center gap-1.5 rounded-md bg-bg-2 px-2.5 py-1 text-xs font-mono font-medium text-ink ring-1 ring-line hover:ring-line-active hover:bg-bg-1 transition focus-ring"
+          title={theme === "dark" ? "Switch to Maritime Daylight Light Mode" : "Switch to Command Dark Mode"}
+        >
+          {theme === "dark" ? (
+            <>
+              <Sun className="h-3.5 w-3.5 text-amber" />
+              <span className="text-[10px] font-semibold text-ink-dim">LIGHT</span>
+            </>
+          ) : (
+            <>
+              <Moon className="h-3.5 w-3.5 text-aqua" />
+              <span className="text-[10px] font-semibold text-ink-dim">DARK</span>
+            </>
+          )}
+        </button>
+
         <button
           onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
-          className="hidden md:flex items-center gap-2 rounded-md bg-bg-2 px-2.5 py-1 ring-1 ring-line hover:ring-line-active text-ink-dim hover:text-ink transition-colors focus-ring"
+          className="hidden xl:flex items-center gap-2 rounded-md bg-bg-2 px-2.5 py-1 ring-1 ring-line hover:ring-line-active text-ink-dim hover:text-ink transition-colors focus-ring"
           title="Open Command Palette (Ctrl+K)"
         >
           <Search className="h-3.5 w-3.5 text-aqua" />
@@ -173,42 +206,35 @@ export const TopBar: React.FC = () => {
           DATA {dataSource}
         </button>
 
-        {/* ── HIGH-VISIBILITY MISSION DEMO LAUNCHPAD ── */}
+        {/* ── MISSION DEMO CONTROLLER ── */}
         <div className="flex items-center gap-1.5">
           {!isDemoRunning ? (
             <button
               onClick={runDemo}
-              className="group relative flex items-center gap-2 rounded-lg border border-teal/50 bg-gradient-to-r from-teal/20 via-aqua/15 to-blue/20 px-3 py-1.5 font-mono text-xs font-bold text-teal shadow-[0_0_18px_rgba(34,211,167,0.25)] transition-all hover:border-teal hover:bg-teal/25 hover:shadow-[0_0_24px_rgba(34,211,167,0.45)] focus-ring active:scale-95"
+              className="flex items-center gap-2 rounded-md bg-teal text-slate-950 px-3 py-1 font-mono text-xs font-bold hover:bg-teal/90 transition shadow-sm active:scale-95"
               title="Launch 8-Stage Autonomous Mission Walkthrough"
             >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-teal"></span>
-              </span>
-              <Play className="h-3.5 w-3.5 fill-teal text-teal group-hover:scale-110 transition-transform" />
-              <span className="tracking-wide">MISSION DEMO</span>
-              <span className="rounded bg-teal/25 px-1.5 py-0.5 text-[9px] font-mono text-ink tracking-normal">
+              <Play className="h-3.5 w-3.5 fill-current" />
+              <span>MISSION DEMO</span>
+              <span className="rounded bg-slate-950/15 px-1 py-0.5 text-[9px] font-mono">
                 8 STAGES
               </span>
             </button>
           ) : (
-            <div className="flex items-center gap-1 rounded-lg border border-teal/40 bg-bg-2 p-1 ring-1 ring-teal/30 shadow-[0_0_15px_rgba(34,211,167,0.2)]">
+            <div className="flex items-center gap-1 rounded-md border border-line bg-bg-2 p-1">
               <button
                 onClick={() => useCommandStore.getState().togglePauseDemo()}
-                className="flex items-center gap-1.5 rounded-md bg-teal/20 px-2.5 py-1 font-mono text-[10px] font-bold text-teal hover:bg-teal/30 transition-colors"
+                className="flex items-center gap-1.5 rounded bg-teal/20 px-2 py-0.5 font-mono text-[10px] font-bold text-teal hover:bg-teal/30 transition-colors"
                 title={isDemoPaused ? "Click to resume autopilot" : "Click to pause timer"}
               >
-                <span className="relative flex h-2 w-2">
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isDemoPaused ? "bg-amber" : "bg-teal"} opacity-75`}></span>
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isDemoPaused ? "bg-amber" : "bg-teal"}`}></span>
-                </span>
+                <span className={`h-1.5 w-1.5 rounded-full ${isDemoPaused ? "bg-amber" : "bg-teal"}`} />
                 <span>{isDemoPaused ? "PAUSED" : "LIVE DEMO"}</span>
                 <span className="text-ink-dim">·</span>
                 <span className="text-amber">S{demoStep}/8</span>
               </button>
               <button
                 onClick={resetDemo}
-                className="rounded-md p-1 text-ink-faint transition-colors hover:bg-red/20 hover:text-red focus-ring"
+                className="rounded p-1 text-ink-faint transition-colors hover:bg-red/20 hover:text-red"
                 title="Exit demo mode"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
@@ -218,36 +244,10 @@ export const TopBar: React.FC = () => {
           {!isDemoRunning && (
             <button
               onClick={resetDemo}
-              className="rounded-md p-1 text-ink-faint transition-colors hover:bg-bg-1 hover:text-ink focus-ring"
+              className="rounded p-1 text-ink-faint transition-colors hover:bg-bg-2 hover:text-ink"
               title="Reset demo state"
             >
               <RotateCcw className="h-3.5 w-3.5" />
-            </button>
-          )}
-
-          <div className="h-5 w-px bg-line mx-1" />
-
-          {/* ── 3D HOLOGRAPHIC COMMAND THEATRE QUICK SWITCHER (IMAGE 1 & 2) ── */}
-          {pathname === "/globe" ? (
-            <button
-              onClick={() => router.push("/operations")}
-              className="group relative flex items-center gap-1.5 rounded-lg border border-teal/50 bg-gradient-to-r from-teal/20 to-blue/20 px-2.5 py-1.5 font-mono text-xs font-bold text-teal shadow-[0_0_15px_rgba(34,211,167,0.25)] transition-all hover:bg-teal/30 hover:shadow-[0_0_20px_rgba(34,211,167,0.45)] focus-ring active:scale-95"
-              title="Return to Tactical 2D/3D Operations Map"
-            >
-              <Waves className="h-3.5 w-3.5 text-aqua group-hover:scale-110 transition-transform" />
-              <span>LIVE COP MAP</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => router.push("/globe")}
-              className="group relative flex items-center gap-1.5 rounded-lg border border-cyan-500/50 bg-gradient-to-r from-cyan-950/40 via-blue-950/30 to-bg-2 px-2.5 py-1.5 font-mono text-xs font-bold text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.25)] transition-all hover:border-cyan-400 hover:bg-cyan-900/40 hover:shadow-[0_0_22px_rgba(6,182,212,0.45)] focus-ring active:scale-95"
-              title="Open Global 3D Holographic Globe Command Theatre (Image 1)"
-            >
-              <Globe className="h-3.5 w-3.5 text-cyan-400 group-hover:scale-110 group-hover:rotate-12 transition-transform" />
-              <span>3D THEATRE</span>
-              <span className="rounded bg-cyan-500/20 px-1 py-0.2 text-[8px] font-mono text-cyan-200">
-                GLOBE
-              </span>
             </button>
           )}
         </div>

@@ -174,7 +174,6 @@ export const FloatingGlassHud: React.FC<{
         left: placement.boxX,
         top: placement.boxY,
         width: placement.width,
-        borderColor: `${color}40`,
       }}
     >
       <div className="flex items-center justify-between border-b border-line pb-1.5 mb-2">

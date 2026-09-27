@@ -20,6 +20,7 @@ import {
   Box,
   Eye,
   Sparkles,
+  Globe,
 } from "lucide-react";
 import {
   generateTacticalHoloGridGeoJson,
@@ -54,6 +55,8 @@ import {
   focusOnSpill,
   DEMO_STAGE_POSES,
   THEATRE_OVERVIEW,
+  GLOBAL_ORBIT,
+  TACTICAL_COP,
   type SheenLayerHandle,
   type ContaminationMode,
   type BloomHandle,
@@ -193,7 +196,7 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
   const [contaminationMode, setContaminationMode] = useState<ContaminationMode>("volume");
   const [activeHud, setActiveHud] = useState<"incident" | "satellite" | "vessel" | "port" | null>("incident");
   const [selectedPortNode, setSelectedPortNode] = useState<InfrastructureNode | null>(null);
-  const [isHolo3D, setIsHolo3D] = useState(false);
+  const [isGlobeView, setIsGlobeView] = useState(false);
   const originBeaconRef = useRef<maplibregl.Marker | null>(null);
   const router = useRouter();
 
@@ -1199,9 +1202,10 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
           },
         ],
       },
-      center: [69.112, 21.845],
-      zoom: 8,
-      pitch: 15,
+      center: GLOBAL_ORBIT.center,
+      zoom: GLOBAL_ORBIT.zoom,
+      pitch: GLOBAL_ORBIT.pitch ?? 0,
+      bearing: GLOBAL_ORBIT.bearing ?? 0,
       attributionControl: false,
       pitchWithRotate: true,
       dragRotate: true,
@@ -1214,6 +1218,11 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
       addBaseLayers(map);
       addLivingOverlayStacks(map);
       if (incident) addOilLayers(map, incident);
+
+      // Seamless Apple Maps / Google Earth flight: from orbit down to tactical COP
+      setTimeout(() => {
+        flyToPose(map, TACTICAL_COP);
+      }, 400);
     });
 
     map.on("move", () => {
@@ -1258,33 +1267,18 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
     }
   }, [store.candidateVessels, store.driftResult, propVessels, mapLoaded]);
 
-  /* 3D Isometric Holographic Theatre Camera Controller (Image 2) */
-  const toggleHolo3D = useCallback(() => {
+  /* Globe Earth Orbit <-> Tactical COP Transition (Google Earth / Apple Maps) */
+  const toggleGlobeView = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
-    const next = !isHolo3D;
-    setIsHolo3D(next);
-
-    if (next) {
-      map.dragRotate.enable();
-      map.touchZoomRotate.enableRotation();
-      map.easeTo({
-        center: [69.18, 21.82],
-        zoom: 9.15,
-        pitch: 58,
-        bearing: -32,
-        duration: 1800,
-      });
+    if (isGlobeView) {
+      flyToPose(map, TACTICAL_COP);
+      setIsGlobeView(false);
     } else {
-      map.easeTo({
-        center: [69.112, 21.845],
-        zoom: 8,
-        pitch: 15,
-        bearing: 0,
-        duration: 1400,
-      });
+      flyToPose(map, GLOBAL_ORBIT);
+      setIsGlobeView(true);
     }
-  }, [isHolo3D]);
+  }, [isGlobeView]);
 
   /* Layer visibility sync */
   useEffect(() => {
@@ -1629,9 +1623,9 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
             <button
               key={mode}
               onClick={() => setContaminationMode(mode)}
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[10px] font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[10px] font-semibold transition-all duration-150 ${
                 active
-                  ? "bg-amber/20 text-amber border border-amber/50 shadow-sm"
+                  ? "bg-bg-2 text-ink border border-line-active shadow-sm"
                   : "text-ink-dim hover:text-ink hover:bg-panel-hover border border-transparent"
               }`}
             >
@@ -1646,17 +1640,16 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
 
         <div className="h-4 w-px bg-line mx-0.5" />
         <button
-          onClick={toggleHolo3D}
-          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[10px] font-bold transition-all duration-200 ${
-            isHolo3D
-              ? "bg-gradient-to-r from-cyan-500/25 to-teal-500/25 text-cyan-300 border border-cyan-400/80 shadow-[0_0_15px_rgba(6,182,212,0.5)]"
-              : "text-ink-dim hover:text-cyan-300 hover:bg-cyan-950/30 border border-transparent"
+          onClick={toggleGlobeView}
+          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[10px] font-semibold transition-all duration-150 ${
+            isGlobeView
+              ? "bg-bg-2 text-aqua border border-line-active shadow-sm"
+              : "text-ink-dim hover:text-ink hover:bg-panel-hover border border-transparent"
           }`}
-          title="Toggle 3D Isometric Holographic Maritime Theatre (Image 2)"
+          title={isGlobeView ? "Zoom back down to Tactical 10m COP (Gulf of Kutch)" : "Zoom out to Global Earth Orbit (Apple Maps / Google Earth style)"}
         >
-          <Sparkles className="h-3 w-3 text-cyan-400" />
-          <span>3D HOLO THEATRE</span>
-          {isHolo3D && <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping" />}
+          <Globe className="h-3 w-3 text-aqua" />
+          <span>{isGlobeView ? "ZOOM TO TACTICAL COP" : "GLOBAL EARTH ORBIT"}</span>
         </button>
       </div>
 
@@ -1669,8 +1662,8 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
         />
       )}
 
-      {/* ── 3D HOLOGRAPHIC AIS TELEMETRY CARD (IMAGE 2) ── */}
-      {mapLoaded && topVessel && vesselPlacement && (isHolo3D || activeHud === "vessel" || demoStep >= 7) && (
+      {/* ── AIS VESSEL FORENSIC TELEMETRY CARD ── */}
+      {mapLoaded && topVessel && vesselPlacement && (activeHud === "vessel" || demoStep >= 7) && (
         <div
           style={{
             position: "absolute",
@@ -1678,9 +1671,9 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
             top: `${Math.max(12, vesselPlacement.boxY - 30)}px`,
             zIndex: 35,
           }}
-          className="animate-in fade-in zoom-in-95 duration-300"
+          className="animate-in fade-in zoom-in-95 duration-200"
         >
-          <HudLeaderLine placement={vesselPlacement} color="#06B6D4" />
+          <HudLeaderLine placement={vesselPlacement} color="#38BDF8" />
           <HoloVesselCard
             vessel={topVessel}
             onClose={() => {
@@ -1778,23 +1771,20 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
         <button
           onClick={reset}
           className="rounded-lg p-1.5 text-ink-dim transition-colors hover:bg-panel-hover hover:text-ink"
-          title="Reset Theatre View"
+          title="Reset View"
         >
           <RotateCcw className="h-3.5 w-3.5" />
         </button>
         <button
-          onClick={toggleHolo3D}
+          onClick={toggleGlobeView}
           className={`relative rounded-lg p-1.5 transition-all ${
-            isHolo3D
-              ? "bg-cyan-500/30 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.6)] ring-1 ring-cyan-400"
+            isGlobeView
+              ? "bg-bg-2 text-aqua border border-line-active"
               : "text-ink-dim hover:bg-panel-hover hover:text-ink"
           }`}
-          title={isHolo3D ? "Exit 3D Isometric Holo Mode" : "Switch to 3D Isometric Holo Theatre (Image 2)"}
+          title={isGlobeView ? "Zoom in to Tactical COP" : "Zoom out to Global Earth Orbit (Apple Maps style)"}
         >
-          <Sparkles className={`h-3.5 w-3.5 ${isHolo3D ? "text-cyan-300 animate-pulse" : ""}`} />
-          {isHolo3D && (
-            <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-cyan-400 ring-1 ring-black" />
-          )}
+          <Globe className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

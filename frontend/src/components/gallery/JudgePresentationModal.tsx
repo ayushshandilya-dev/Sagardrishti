@@ -38,24 +38,23 @@ export const JudgePresentationModal: React.FC<JudgePresentationModalProps> = ({
     let interval: NodeJS.Timeout;
     if (isPlaying) {
       interval = setInterval(() => {
-        setSecondsRemaining((prev) => {
-          if (prev <= 1) {
-            // Advance to next stage
-            if (currentIndex < comparisons.length - 1) {
-              onSelectIndex(currentIndex + 1);
-              return 12;
-            } else {
-              // Loop back to start or finish presentation
-              onSelectIndex(0);
-              return 12;
-            }
-          }
-          return prev - 1;
-        });
+        setSecondsRemaining((prev) => (prev > 0 ? prev - 1 : 0));
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isPlaying, currentIndex, comparisons.length, onSelectIndex]);
+  }, [isPlaying]);
+
+  // Stage change trigger when countdown hits zero
+  useEffect(() => {
+    if (secondsRemaining <= 0 && isPlaying) {
+      if (currentIndex < comparisons.length - 1) {
+        onSelectIndex(currentIndex + 1);
+      } else {
+        onSelectIndex(0);
+      }
+      setSecondsRemaining(12);
+    }
+  }, [secondsRemaining, isPlaying, currentIndex, comparisons.length, onSelectIndex]);
 
   // Reset timer on stage change
   useEffect(() => {

@@ -32,8 +32,7 @@ export const CommandRail: React.FC = () => {
   const { selectedIncidentId, selectedVesselImo } = useCommandStore();
 
   const items: RailItem[] = [
-    { key: "globe", href: "/globe", label: "3D Theatre", icon: Globe, scope: "globe" },
-    { key: "operations", href: "/operations", label: "Operations", icon: Compass, scope: "operations" },
+    { key: "operations", href: "/operations", label: "Operations COP", icon: Compass, scope: "operations" },
     {
       key: "sar",
       href: `/sar/${selectedIncidentId || "SD-2026-00421"}`,
@@ -42,17 +41,17 @@ export const CommandRail: React.FC = () => {
       scope: "sar",
     },
     { key: "drift", href: "/drift", label: "Reverse Drift", icon: Wind, scope: "drift" },
-    { key: "attribution", href: "/attribution", label: "Attribution", icon: Target, scope: "attribution" },
+    { key: "attribution", href: "/attribution", label: "Vessel Attribution", icon: Target, scope: "attribution" },
     {
       key: "vessels",
       href: `/vessels/${selectedVesselImo || 9123456}`,
-      label: "Vessel Investigation",
+      label: "Vessel Profile",
       icon: Ship,
       scope: "vessels",
     },
     { key: "evidence", href: "/evidence", label: "Evidence Ledger", icon: Link2, scope: "evidence" },
     { key: "dossier", href: "/dossier", label: "Legal Dossier", icon: FileText, scope: "dossier" },
-    { key: "explainability", href: "/explainability", label: "Explainability Gallery", icon: Sparkles, scope: "explainability" },
+    { key: "explainability", href: "/explainability", label: "Algorithm Gallery", icon: Sparkles, scope: "explainability" },
   ];
 
   const isActive = (item: RailItem) => {

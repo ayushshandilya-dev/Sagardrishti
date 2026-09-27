@@ -205,16 +205,21 @@ export const DemoChoreographerBanner: React.FC = () => {
 
     const timer = setInterval(() => {
       setProgressPct((prev) => {
-        if (prev >= 100) {
-          handleNext();
-          return 0;
-        }
+        if (prev >= 100) return 100;
         return prev + stepIncrement;
       });
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [isDemoRunning, isDemoPaused, demoStep, currentStage.durationSec, handleNext]);
+  }, [isDemoRunning, isDemoPaused, demoStep, currentStage.durationSec]);
+
+  // Separate effect to trigger stage advance when progress reaches 100%
+  useEffect(() => {
+    if (progressPct >= 100) {
+      setProgressPct(0);
+      handleNext();
+    }
+  }, [progressPct, handleNext]);
 
   // Handle Speech toggle update
   useEffect(() => {
@@ -258,11 +263,11 @@ export const DemoChoreographerBanner: React.FC = () => {
 
   return (
     <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 w-full max-w-4xl px-4 select-none animate-fadeIn">
-      <div className="relative overflow-hidden rounded-2xl border border-amber/50 bg-bg-1/95 p-3 shadow-2xl backdrop-blur-xl flex flex-col gap-2.5">
-        {/* Animated Progress Bar */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-bg-2">
+      <div className="relative overflow-hidden rounded-xl border border-line bg-bg-1/95 p-3 shadow-float backdrop-blur-md flex flex-col gap-2.5">
+        {/* Progress Bar */}
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-bg-2">
           <div
-            className="h-full bg-gradient-to-r from-amber to-aqua transition-all duration-100 ease-linear shadow-[0_0_8px_rgba(214,168,79,0.8)]"
+            className="h-full bg-aqua transition-all duration-100 ease-linear"
             style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
           />
         </div>
@@ -271,15 +276,15 @@ export const DemoChoreographerBanner: React.FC = () => {
         <div className="flex items-center justify-between gap-3 pt-1">
           {/* Stage Info */}
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber/20 border border-amber text-amber font-mono font-bold text-xs shadow-[0_0_12px_rgba(214,168,79,0.4)]">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-bg-2 border border-line text-ink font-mono font-bold text-xs shadow-sm">
               {demoStep}
             </span>
             <div className="leading-tight min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono font-semibold text-amber uppercase tracking-wider">
-                  AUTOMATED DEMO WALKTHROUGH · STAGE {demoStep} OF {DEMO_STAGES.length}
+                <span className="text-[10px] font-mono font-medium text-ink-dim uppercase tracking-wider">
+                  MISSION WALKTHROUGH · STAGE {demoStep} OF {DEMO_STAGES.length}
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-bg-2 border border-line text-[9px] font-mono text-aqua font-semibold">
+                <span className="px-1.5 py-0.5 rounded bg-bg-2 border border-line text-[9px] font-mono text-aqua font-medium">
                   {currentStage.category}
                 </span>
               </div>
@@ -304,9 +309,9 @@ export const DemoChoreographerBanner: React.FC = () => {
             {/* Pause / Resume */}
             <button
               onClick={togglePauseDemo}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-mono font-semibold transition-all ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-mono font-medium transition-all ${
                 isDemoPaused
-                  ? "bg-amber/20 border-amber text-amber shadow-[0_0_10px_rgba(214,168,79,0.3)] animate-pulse"
+                  ? "bg-amber/15 border-amber/30 text-amber"
                   : "bg-bg-2 border-line text-ink hover:border-line-active"
               }`}
               title="Pause / Resume (Spacebar)"
@@ -335,15 +340,15 @@ export const DemoChoreographerBanner: React.FC = () => {
             {/* AI Voice Speech Toggle */}
             <button
               onClick={toggleSpeech}
-              className={`flex items-center gap-1 px-2 py-1.5 rounded-lg border text-xs font-mono font-semibold transition-all ${
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-lg border text-xs font-mono font-medium transition-all ${
                 isSpeechEnabled
-                  ? "bg-teal/20 border-teal text-teal shadow-[0_0_10px_rgba(20,184,166,0.3)]"
+                  ? "bg-teal/15 border-teal/30 text-teal"
                   : "bg-bg-2 border-line text-ink-faint hover:text-ink"
               }`}
               title="Toggle AI Speech Voice Narration (Key: M)"
             >
               {isSpeechEnabled ? (
-                <Volume2 className="h-3.5 w-3.5 text-teal animate-pulse" />
+                <Volume2 className="h-3.5 w-3.5 text-teal" />
               ) : (
                 <VolumeX className="h-3.5 w-3.5 text-ink-faint" />
               )}
@@ -353,10 +358,10 @@ export const DemoChoreographerBanner: React.FC = () => {
             {/* Jump to Gallery */}
             <button
               onClick={() => router.push("/explainability")}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-aqua/40 bg-aqua/10 text-xs font-mono font-semibold text-aqua hover:bg-aqua/20 transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-line bg-bg-2 text-xs font-mono font-medium text-ink hover:bg-panel-hover transition-colors"
               title="Jump directly to Explainability Gallery"
             >
-              <Sparkles className="h-3 w-3" /> GALLERY
+              <Sparkles className="h-3 w-3 text-aqua" /> GALLERY
             </button>
 
             {/* Close / Exit Demo */}
@@ -383,9 +388,9 @@ export const DemoChoreographerBanner: React.FC = () => {
                 onClick={() => handleStepJump(s.step)}
                 className={`flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-lg border transition-all text-[10px] font-mono font-medium ${
                   isActive
-                    ? "bg-amber/20 border-amber text-amber font-bold shadow-[0_0_8px_rgba(214,168,79,0.3)] scale-[1.02]"
+                    ? "bg-bg-2 border-line-active text-ink font-bold shadow-sm"
                     : isCompleted
-                    ? "bg-bg-2 border-teal/40 text-teal hover:border-teal"
+                    ? "bg-bg-2 border-line text-ink-dim hover:text-ink"
                     : "bg-bg-2/50 border-line text-ink-faint hover:text-ink hover:border-line-active"
                 }`}
                 title={`Stage ${s.step}: ${s.title}`}

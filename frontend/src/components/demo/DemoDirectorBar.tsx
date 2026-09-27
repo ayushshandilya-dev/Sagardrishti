@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -116,22 +116,26 @@ export const DemoDirectorBar: React.FC = () => {
 
     const interval = setInterval(() => {
       setElapsedSec((prev) => {
-        const next = prev + 0.25;
-        if (next >= currentStage.dwellSeconds) {
-          if (currentStage.step < 8) {
-            goToStage(currentStage.step + 1);
-          } else {
-            // Completed all 8 stages
-            useCommandStore.setState({ isDemoPaused: true });
-          }
-          return 0;
-        }
-        return next;
+        if (prev >= currentStage.dwellSeconds) return currentStage.dwellSeconds;
+        return prev + 0.25;
       });
     }, 250);
 
     return () => clearInterval(interval);
-  }, [isDemoRunning, isDemoPaused, currentStage, goToStage]);
+  }, [isDemoRunning, isDemoPaused, currentStage?.dwellSeconds]);
+
+  /* Handle auto-advance when dwell time finishes */
+  useEffect(() => {
+    if (!isDemoRunning || isDemoPaused || !currentStage) return;
+    if (elapsedSec >= currentStage.dwellSeconds) {
+      setElapsedSec(0);
+      if (currentStage.step < 8) {
+        goToStage(currentStage.step + 1);
+      } else {
+        useCommandStore.setState({ isDemoPaused: true });
+      }
+    }
+  }, [elapsedSec, isDemoRunning, isDemoPaused, currentStage, goToStage]);
 
   if (!isDemoRunning) return null;
 
