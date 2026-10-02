@@ -206,7 +206,14 @@ function renderScene(
       data[ix + 3] = 255;
     }
   }
-  ctx.putImageData(img, 0, 0);
+  const tmpCanvas = document.createElement("canvas");
+  tmpCanvas.width = W;
+  tmpCanvas.height = H;
+  const tmpCtx = tmpCanvas.getContext("2d");
+  if (tmpCtx) {
+    tmpCtx.putImageData(img, 0, 0);
+    ctx.drawImage(tmpCanvas, 0, 0);
+  }
 
   /* SEGMENTATION / FINAL MASK overlays */
   if (mode === "SEGMENTATION" || mode === "FINAL MASK") {
