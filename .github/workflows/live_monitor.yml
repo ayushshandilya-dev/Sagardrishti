@@ -67,6 +67,16 @@ jobs:
             --days "${{ github.event.inputs.days || '3' }}" \
             | tee detection_report.txt
 
+      # Commit the fresh detection JSON back to the repo so the live website can read it
+      - name: 📡 Publish Live Detection to Repo
+        run: |
+          git config user.name "Sagardrishti Bot"
+          git config user.email "sagardrishti-bot@github-actions"
+          git add output/latest_detection.json
+          git diff --cached --quiet || git commit -m "🛰️ live: update detection from Sentinel-1 pass [skip ci]"
+          git push
+
+
       # Step 5: Save the detection report as a downloadable artifact
       - name: 📊 Upload Detection Report
         if: always()

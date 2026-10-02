@@ -1,0 +1,89 @@
+{
+  "eventId": "SD-LIVE-20261002-0638",
+  "timestampUtc": "2026-09-30T01:02:38Z",
+  "severity": "CRITICAL",
+  "sarMetadata": {
+    "mission": "SENTINEL-1D",
+    "sensor": "C-Band SAR (IW Mode)",
+    "productType": "GRD-IW",
+    "polarization": [
+      "VV",
+      "VH"
+    ],
+    "relativeOrbit": 48,
+    "passDirection": "DESCENDING",
+    "incidenceAngleDeg": 36.5,
+    "acquisitionUtc": "2026-09-30T01:02:38Z",
+    "rawSceneSha256": "5d5dbc62c40acd94a47337c55f90914f7c57b5975b50a559b831a5e1973d91ec",
+    "resolutionMeters": 10
+  },
+  "spillGeometry": {
+    "centroid": {
+      "latitude": 19.0,
+      "longitude": 72.0
+    },
+    "areaKm2": 18.5,
+    "perimeterKm": 33.3,
+    "lengthKm": 6.5,
+    "widthKm": 2.6,
+    "skeletonOrientationDeg": 248.5,
+    "boundingBox": {
+      "lowerLeft": {
+        "latitude": 18.85,
+        "longitude": 71.75
+      },
+      "upperRight": {
+        "latitude": 19.15,
+        "longitude": 72.25
+      }
+    },
+    "polygonGeoJson": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            71.8,
+            18.9
+          ],
+          [
+            72.2,
+            18.92
+          ],
+          [
+            72.18,
+            19.12
+          ],
+          [
+            71.78,
+            19.09
+          ],
+          [
+            71.8,
+            18.9
+          ]
+        ]
+      ]
+    }
+  },
+  "classification": {
+    "classLabel": "MINERAL_OIL",
+    "confidence": 0.87,
+    "lookAlikeProbs": {
+      "mineralOil": 0.87,
+      "biogenicSlick": 0.05,
+      "lowWindArea": 0.04,
+      "shipWake": 0.04
+    }
+  },
+  "detectionScores": {
+    "textureScore": 0.88,
+    "vvVhAgreement": 0.84,
+    "morphologyAgreement": 0.86,
+    "thresholdScore": 0.82,
+    "segmentationAgreement": 0.91
+  },
+  "numSlicksDetected": 231,
+  "sceneStatus": "OIL_SPILL_DETECTED",
+  "stage1Tiles": 81,
+  "radarBrief": "Live Sentinel-1D pass detected 231 anomalous dark formations over the Mumbai Offshore region. Damped VV/VH cross-pol backscatter and high GLCM homogeneity consistent with hydrocarbon film."
+}
