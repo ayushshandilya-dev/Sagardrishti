@@ -72,9 +72,13 @@ jobs:
         run: |
           git config user.name "Sagardrishti Bot"
           git config user.email "sagardrishti-bot@github-actions"
-          git add output/latest_detection.json
-          git diff --cached --quiet || git commit -m "🛰️ live: update detection from Sentinel-1 pass [skip ci]"
-          git push
+          if [ -f "output/latest_detection.json" ]; then
+            git add output/latest_detection.json
+            git diff --cached --quiet || git commit -m "🛰️ live: update detection from Sentinel-1 pass [skip ci]"
+            git push
+          else
+            echo "No new detection file generated. Skipping commit."
+          fi
 
 
       # Step 5: Save the detection report as a downloadable artifact
