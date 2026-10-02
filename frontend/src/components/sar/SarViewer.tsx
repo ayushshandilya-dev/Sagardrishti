@@ -257,18 +257,38 @@ export const SarViewer: React.FC<SarViewerProps> = ({ incident, className }) => 
     const cv = canvasRef.current;
     const raw = rawCanvasRef.current;
     const view = viewRef.current;
-    if (!cv || !raw) return;
+    const wrap = wrapRef.current;
+    if (!cv || !raw || !wrap) return;
+
     const dpr = Math.min(2, window.devicePixelRatio || 1);
+    
+    if (cv.width !== wrap.clientWidth * dpr || cv.height !== wrap.clientHeight * dpr) {
+      cv.width = wrap.clientWidth * dpr;
+      cv.height = wrap.clientHeight * dpr;
+      raw.width = cv.width;
+      raw.height = cv.height;
+    }
+
     const W = cv.width / dpr;
     const H = cv.height / dpr;
     const ctx = cv.getContext("2d");
     if (!ctx) return;
 
+    // Use an offscreen buffer for the current mode scene
+    let buf = (cv as any)._buffer;
+    if (!buf || buf.width !== cv.width || buf.height !== cv.height) {
+        buf = document.createElement("canvas");
+        buf.width = cv.width;
+        buf.height = cv.height;
+        (cv as any)._buffer = buf;
+        (cv as any).dataset.scene = ""; // force re-render
+    }
+
     // re-render current-mode scene only when mode/output size changed
     const curTarget = `${mode}:${W}:${H}`;
-    if (cv.dataset.scene !== curTarget) {
-      renderScene(cv, incident, mode, "scene");
-      cv.dataset.scene = curTarget;
+    if ((cv as any).dataset.scene !== curTarget) {
+      renderScene(buf, incident, mode, "scene");
+      (cv as any).dataset.scene = curTarget;
     }
     const rawKey = `RAW:${W}:${H}`;
     if (raw.dataset.scene !== rawKey) {
@@ -277,10 +297,9 @@ export const SarViewer: React.FC<SarViewerProps> = ({ incident, className }) => 
     }
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, W, H);
+    ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.save();
-    ctx.scale(dpr, dpr);
     ctx.translate(view.ox, view.oy);
     ctx.scale(view.zoom, view.zoom);
 
@@ -297,10 +316,10 @@ export const SarViewer: React.FC<SarViewerProps> = ({ incident, className }) => 
       ctx.beginPath();
       ctx.rect(dx, 0, W, H);
       ctx.clip();
-      ctx.drawImage(cv, 0, 0, W, H);
+      ctx.drawImage(buf, 0, 0, W, H);
       ctx.restore();
     } else {
-      ctx.drawImage(cv, 0, 0, W, H);
+      ctx.drawImage(buf, 0, 0, W, H);
     }
     ctx.restore();
 
