@@ -25,3 +25,12 @@ data/*.db
 *.pdf
 .vercel
 .env*
+
+# Live satellite data — too large for git (2GB+ files)
+data/live_feed/
+
+# Test screenshots and recordings
+test_*.png
+videos_test/
+recordings_raw/
+record_full_presentation.js
