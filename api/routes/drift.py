@@ -34,34 +34,42 @@ async def calculate_backtrack(req: DriftRequest) -> dict[str, Any]:
     """
     base_time = datetime.fromisoformat(req.sar_timestamp.replace("Z", "+00:00"))
 
-    # Resolve MetOcean vectors
-    current_u, current_v = -0.32, -0.18  # fallback Saurashtra coastal flow
-    wind_u, wind_v = -4.5, -3.2          # fallback NE monsoon wind
+    # Resolve MetOcean vectors (Default fallback)
+    current_u, current_v = -0.32, -0.18  
+    wind_u, wind_v = -4.5, -3.2          
 
     try:
-        provider = create_metocean_provider(
-            req.data_source if req.data_source in ("incois", "ecmwf", "hybrid", "sample") else "sample"
-        )
-        bbox = (req.latitude - 1.0, req.longitude - 1.0, req.latitude + 1.0, req.longitude + 1.0)
-        curr_field = provider.get_currents(base_time, bbox)
-        wind_field = provider.get_winds(base_time, bbox)
-
-        def current_func(lon: float, lat: float, t: float):
-            return curr_field.interpolate(lat, lon)
-
-        def wind_func(lon: float, lat: float, t: float):
-            return wind_field.interpolate(lat, lon)
-
-        cu, cv = current_func(req.longitude, req.latitude, 0.0)
-        wu, wv = wind_func(req.longitude, req.latitude, 0.0)
-        if not (math.isnan(cu) or math.isnan(cv)):
-            current_u, current_v = cu, cv
-        if not (math.isnan(wu) or math.isnan(wv)):
-            wind_u, wind_v = wu, wv
+        import requests
+        # Fetch real ocean currents from Open-Meteo Marine API
+        marine_res = requests.get(
+            f"https://marine-api.open-meteo.com/v1/marine?latitude={req.latitude}&longitude={req.longitude}&current=ocean_current_velocity,ocean_current_direction",
+            timeout=3.0
+        ).json()
+        
+        # Fetch real wind from Open-Meteo Forecast API
+        weather_res = requests.get(
+            f"https://api.open-meteo.com/v1/forecast?latitude={req.latitude}&longitude={req.longitude}&current=wind_speed_10m,wind_direction_10m",
+            timeout=3.0
+        ).json()
+        
+        c_speed = marine_res["current"]["ocean_current_velocity"] / 3.6 # convert km/h to m/s
+        c_dir = math.radians(marine_res["current"]["ocean_current_direction"])
+        
+        w_speed = weather_res["current"]["wind_speed_10m"] / 3.6 # convert km/h to m/s
+        w_dir = math.radians(weather_res["current"]["wind_direction_10m"])
+        
+        # Convert polar to cartesian (U=East, V=North)
+        current_u, current_v = c_speed * math.sin(c_dir), c_speed * math.cos(c_dir)
+        wind_u, wind_v = w_speed * math.sin(w_dir), w_speed * math.cos(w_dir)
+        logger.info(f"Open-Meteo Live Data Fetched: Current({current_u:.2f}, {current_v:.2f}) Wind({wind_u:.2f}, {wind_v:.2f})")
     except Exception as exc:
         logger.warning("MetOcean provider fallback to climatology: %s", exc)
-        current_func = lambda lon, lat, t: (current_u, current_v)
-        wind_func = lambda lon, lat, t: (wind_u, wind_v)
+
+    def current_func(lon: float, lat: float, t: float):
+        return (current_u, current_v)
+
+    def wind_func(lon: float, lat: float, t: float):
+        return (wind_u, wind_v)
 
     # Compass bearings (direction of movement, from-north clockwise)
     current_dir = round(math.degrees(math.atan2(current_u, current_v)) % 360, 1)

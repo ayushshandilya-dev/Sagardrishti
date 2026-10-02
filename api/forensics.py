@@ -18,11 +18,19 @@ from core.evidence.ledger import (
     ed25519_sign_hex,
 )
 from data.sample_scenes import MOCK_AIS_VESSELS, MOCK_METOCEAN, MOCK_SAR_SCENES
-
+import pathlib
+_LIVE_DETECTION_PATH = pathlib.Path(__file__).resolve().parents[1] / "output" / "latest_detection.json"
 
 def build_evidence_payload() -> dict[str, Any]:
     """Hash the active scene/vessels/met-ocean set and sign the Merkle root."""
     scene = MOCK_SAR_SCENES[0]
+    try:
+        if _LIVE_DETECTION_PATH.exists():
+            with open(_LIVE_DETECTION_PATH) as f:
+                scene = json.load(f)
+    except Exception:
+        pass
+        
     vessels = MOCK_AIS_VESSELS
     metocean = MOCK_METOCEAN
 
