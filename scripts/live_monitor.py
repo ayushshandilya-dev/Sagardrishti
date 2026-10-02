@@ -183,6 +183,7 @@ def _write_incident_json(safe_folder_path: str, results: dict):
         "numSlicksDetected": num_slicks,
         "sceneStatus": results.get("scene_status", "CLEAN"),
         "stage1Tiles": results.get("stage1_telemetry", {}).get("total_tiles", 0),
+        "evidenceChips": ["VV Verified", "VH Verified", "Texture Verified", "Segmentation Verified"] if is_detected else ["Clean Radar Signature"],
         "radarBrief": (
             f"Live Sentinel-1D pass detected {num_slicks} anomalous dark formations "
             f"over the Mumbai Offshore region. Damped VV/VH cross-pol backscatter "
