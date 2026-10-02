@@ -130,7 +130,7 @@ export const EvidenceChips: React.FC<{ incident: Incident }> = ({ incident }) =>
       </span>
     </div>
     <div className="flex flex-wrap gap-1.5">
-      {incident.evidenceChips.map((chip) => (
+      {(incident.evidenceChips || []).map((chip) => (
         <span
           key={chip}
           className="rounded bg-teal/8 px-2 py-1 font-mono text-[10px] text-teal ring-1 ring-teal/25"

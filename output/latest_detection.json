@@ -85,5 +85,11 @@
   "numSlicksDetected": 231,
   "sceneStatus": "OIL_SPILL_DETECTED",
   "stage1Tiles": 81,
-  "radarBrief": "Live Sentinel-1D pass detected 231 anomalous dark formations over the Mumbai Offshore region. Damped VV/VH cross-pol backscatter and high GLCM homogeneity consistent with hydrocarbon film."
+  "radarBrief": "Live Sentinel-1D pass detected 231 anomalous dark formations over the Mumbai Offshore region. Damped VV/VH cross-pol backscatter and high GLCM homogeneity consistent with hydrocarbon film.",
+  "evidenceChips": [
+    "VV Verified",
+    "VH Verified",
+    "Texture Verified",
+    "Segmentation Verified"
+  ]
 }
