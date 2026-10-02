@@ -81,12 +81,24 @@ def _build_attribution_payload(
         "confidenceEllipse": ellipse,
     }
 
-    for v in MOCK_AIS_VESSELS:
+    for idx, v in enumerate(MOCK_AIS_VESSELS):
         is_top = v["mmsi"] == 419001234
+        
+        # Dynamically scatter the mock vessels around the actual backtrack origin
+        # Top suspect gets placed perfectly at the origin. Others are scattered.
+        if is_top:
+            dynamic_lat = backtrack_lat
+            dynamic_lon = backtrack_lon
+        else:
+            # Spread them out randomly around the origin (approx 5-15km away)
+            offset_lat = (idx * 0.05) * (-1 if idx % 2 == 0 else 1)
+            offset_lon = (idx * 0.04) * (-1 if idx % 3 == 0 else 1)
+            dynamic_lat = backtrack_lat + offset_lat
+            dynamic_lon = backtrack_lon + offset_lon
 
         mmsi_data = {
-            "latitude": backtrack_lat if is_top else v["latitude"],
-            "longitude": backtrack_lon if is_top else v["longitude"],
+            "latitude": dynamic_lat,
+            "longitude": dynamic_lon,
             "timestamp_utc": 8.5 if is_top else 9.0,
             "course_over_ground": v["courseOverGround"],
             "heading": 248.0 if is_top else v["heading"],
@@ -143,8 +155,8 @@ def _build_attribution_payload(
             "vesselName": v["vesselName"],
             "flag": v["flag"],
             "vesselType": v["vesselType"],
-            "latitude": v["latitude"],
-            "longitude": v["longitude"],
+            "latitude": dynamic_lat,
+            "longitude": dynamic_lon,
             "speedOverGround": v["speedOverGround"],
             "courseOverGround": v["courseOverGround"],
             "heading": v["heading"],
