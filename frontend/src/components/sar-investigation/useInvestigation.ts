@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useCommandStore } from "@/lib/store";
 
 /* ─────────────────────────────────────────────────────────────
    Investigation choreography — the single source of truth for
@@ -113,7 +114,8 @@ export function useInvestigation() {
         await new Promise<void>((res) => {
           const step = (now: number) => {
             const p = Math.min(1, (now - c0) / (reduced ? 20 : 1400));
-            const conf = Math.round(p * 94.2 * 10) / 10;
+            const targetConf = useCommandStore.getState().incidents[0]?.classification?.confidence || 0.942;
+            const conf = Math.round(p * targetConf * 100 * 10) / 10;
             setState((s) => ({ ...s, confidence: conf }));
             if (p < 1) raf.current = window.requestAnimationFrame(step);
             else res();
@@ -123,7 +125,8 @@ export function useInvestigation() {
       }
       if (i < seq.length - 1) await pause(reduced ? 30 : 220);
     }
-    setState((s) => ({ ...s, phase: "complete", prog: 1, confidence: 94.2, playing: false }));
+    const finalConf = Math.round((useCommandStore.getState().incidents[0]?.classification?.confidence || 0.942) * 1000) / 10;
+    setState((s) => ({ ...s, phase: "complete", prog: 1, confidence: finalConf, playing: false }));
   }, [clearTimers, pause, tickPhase]);
 
   const stop = useCallback(() => {
