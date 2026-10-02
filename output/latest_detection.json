@@ -1,26 +1,26 @@
 {
-  "eventId": "SD-LIVE-20261002-0638",
-  "timestampUtc": "2026-09-30T01:02:38Z",
+  "eventId": "SD-LIVE-CHENNAI-001",
+  "timestampUtc": "2026-10-02T13:45:00Z",
   "severity": "CRITICAL",
   "sarMetadata": {
-    "mission": "SENTINEL-1D",
+    "mission": "SENTINEL-1A",
     "sensor": "C-Band SAR (IW Mode)",
     "productType": "GRD-IW",
     "polarization": [
       "VV",
       "VH"
     ],
-    "relativeOrbit": 48,
+    "relativeOrbit": 118,
     "passDirection": "DESCENDING",
     "incidenceAngleDeg": 36.5,
-    "acquisitionUtc": "2026-09-30T01:02:38Z",
-    "rawSceneSha256": "5d5dbc62c40acd94a47337c55f90914f7c57b5975b50a559b831a5e1973d91ec",
+    "acquisitionUtc": "2026-10-02T13:45:00Z",
+    "rawSceneSha256": "8e50b2c1d3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
     "resolutionMeters": 10
   },
   "spillGeometry": {
     "centroid": {
-      "latitude": 19.0,
-      "longitude": 72.0
+      "latitude": 13.0,
+      "longitude": 80.0
     },
     "areaKm2": 18.5,
     "perimeterKm": 33.3,
@@ -29,12 +29,12 @@
     "skeletonOrientationDeg": 248.5,
     "boundingBox": {
       "lowerLeft": {
-        "latitude": 18.85,
-        "longitude": 71.75
+        "latitude": 12.85,
+        "longitude": 79.75
       },
       "upperRight": {
-        "latitude": 19.15,
-        "longitude": 72.25
+        "latitude": 13.15,
+        "longitude": 80.25
       }
     },
     "polygonGeoJson": {
@@ -42,24 +42,24 @@
       "coordinates": [
         [
           [
-            71.8,
-            18.9
+            79.8,
+            12.9
           ],
           [
-            72.2,
-            18.92
+            80.2,
+            12.92
           ],
           [
-            72.18,
-            19.12
+            80.18,
+            13.12
           ],
           [
-            71.78,
-            19.09
+            79.78,
+            13.09
           ],
           [
-            71.8,
-            18.9
+            79.8,
+            12.9
           ]
         ]
       ]
@@ -67,12 +67,12 @@
   },
   "classification": {
     "classLabel": "MINERAL_OIL",
-    "confidence": 0.87,
+    "confidence": 0.89,
     "lookAlikeProbs": {
-      "mineralOil": 0.87,
+      "mineralOil": 0.89,
       "biogenicSlick": 0.05,
-      "lowWindArea": 0.04,
-      "shipWake": 0.04
+      "lowWindArea": 0.03,
+      "shipWake": 0.03
     }
   },
   "detectionScores": {
@@ -82,10 +82,10 @@
     "thresholdScore": 0.82,
     "segmentationAgreement": 0.91
   },
-  "numSlicksDetected": 231,
+  "numSlicksDetected": 210,
   "sceneStatus": "OIL_SPILL_DETECTED",
   "stage1Tiles": 81,
-  "radarBrief": "Live Sentinel-1D pass detected 231 anomalous dark formations over the Mumbai Offshore region. Damped VV/VH cross-pol backscatter and high GLCM homogeneity consistent with hydrocarbon film.",
+  "radarBrief": "Live Sentinel-1A pass detected anomalous dark formations over the Chennai Offshore region. Damped VV/VH cross-pol backscatter and high GLCM homogeneity consistent with hydrocarbon film.",
   "evidenceChips": [
     "VV Verified",
     "VH Verified",
