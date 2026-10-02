@@ -161,6 +161,37 @@ class CascadeOilSpillDetector:
         self.stage1_scanner = Stage1Scanner(self.config)
         self.texture_discriminator = LookAlikeDiscriminator()
         self._deep_detector = None
+        # Explicit flag: True only when a trained checkpoint was successfully
+        # loaded into the model.  Initialized to False; set to True in
+        # load_pretrained_checkpoint().  Never inferred from the model's output.
+        self.has_pretrained_checkpoint: bool = False
+
+    def load_pretrained_checkpoint(self, checkpoint_path: str) -> None:
+        """
+        Load a trained model checkpoint and mark the detector as having a
+        pretrained checkpoint.  Must be called explicitly after construction
+        when real weights are available.
+
+        Args:
+            checkpoint_path: Path to the PyTorch checkpoint file (.pt / .pth).
+        """
+        try:
+            import torch
+            deep_model = self._get_deep_detector()
+            if deep_model is None:
+                raise RuntimeError("Deep detector could not be initialized.")
+            checkpoint = torch.load(checkpoint_path, map_location="cpu")
+            state_dict = checkpoint.get("model_state_dict", checkpoint)
+            deep_model.model.load_state_dict(state_dict)
+            deep_model.model.eval()
+            self.has_pretrained_checkpoint = True
+            logger.info(f"Loaded pretrained checkpoint from {checkpoint_path}")
+        except Exception as exc:
+            logger.warning(
+                f"Failed to load checkpoint '{checkpoint_path}': {exc}. "
+                "Falling back to statistical damping pipeline."
+            )
+            self.has_pretrained_checkpoint = False
 
     def _get_deep_detector(self) -> Optional[Any]:
         """Lazy initialization of deep learning segmentation network."""
@@ -176,6 +207,20 @@ class CascadeOilSpillDetector:
                 logger.warning(f"Deep detector initialization deferred (using texture/statistical cascade fallback): {exc}")
                 self._deep_detector = None
         return self._deep_detector
+
+    def _pin_rng_for_untrained_path(self) -> None:
+        """
+        Seed torch and numpy RNGs to a fixed value for the no-checkpoint code
+        path.  This is defense-in-depth: even if some future code path inside
+        Stage 2 relies on random state, its behavior will be reproducible.
+        Called once per detect() invocation when has_pretrained_checkpoint is False.
+        """
+        np.random.seed(42)
+        try:
+            import torch
+            torch.manual_seed(42)
+        except ImportError:
+            pass
 
     def detect(
         self,
@@ -197,6 +242,11 @@ class CascadeOilSpillDetector:
         h, w = vv_db.shape
         if vh_db is None:
             vh_db = vv_db - 6.0  # Synthetic cross-pol baseline when VH is absent
+
+        # Defense-in-depth: pin RNGs for the untrained-model code path so that
+        # any incidental random state inside Stage 2 produces reproducible output.
+        if not self.has_pretrained_checkpoint:
+            self._pin_rng_for_untrained_path()
 
         # --- STAGE 1: Fast ROI Screening ---
         candidate_rois, stage1_stats = self.stage1_scanner.scan_scene(vv_db, land_mask)
@@ -228,18 +278,23 @@ class CascadeOilSpillDetector:
             tile_vh = vh_db[y1:y2, x1:x2]
             tile_mask = land_mask[y1:y2, x1:x2] if land_mask is not None else None
 
-            # Deep segmentation if model weights/libraries are present
+            local_bg = float(np.median(tile_vv))
+
+            # Deep segmentation only when a real trained checkpoint is loaded.
+            # Checking has_pretrained_checkpoint explicitly (not the model's output)
+            # prevents random noise from an untrained network from bypassing the
+            # deterministic statistical-damping fallback.
             tile_pred = None
-            if deep_model is not None:
+            if self.has_pretrained_checkpoint and deep_model is not None:
                 try:
                     pred_res = deep_model.predict(tile_vv, tile_vh)
                     tile_pred = pred_res["prediction"]
                 except Exception as e:
                     logger.debug(f"Deep inference failed on tile, falling back to texture/dampening: {e}")
 
-            # Fallback: statistical damping segmentation if PyTorch stack is not loaded
-            if tile_pred is None:
-                local_bg = float(np.median(tile_vv))
+            # Fallback: statistical damping segmentation when no trained checkpoint
+            # is loaded or when deep inference raised an exception.
+            if not self.has_pretrained_checkpoint or tile_pred is None:
                 tile_pred = np.where((tile_vv - local_bg) <= self.config.damping_threshold_db, 1, 0)
                 if tile_mask is not None:
                     tile_pred[tile_mask] = 0
