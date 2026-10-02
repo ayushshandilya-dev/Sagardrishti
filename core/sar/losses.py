@@ -93,7 +93,7 @@ class FocalLoss(BaseLoss):
         self.reduction = reduction
 
     def forward(self, inputs: Any, targets: Any) -> Any:
-        if not HAS_TORCH or inputs is None:
+        if not HAS_TORCH or inputs is None or not isinstance(inputs, torch.Tensor):
             # NumPy fallback computation
             probs = np.clip(inputs, 1e-7, 1.0 - 1e-7)
             one_hot = np.eye(probs.shape[1])[targets]
