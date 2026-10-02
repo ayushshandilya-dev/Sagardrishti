@@ -69,18 +69,18 @@ class CDSEClient:
 
     def __init__(
         self,
-        client_id: Optional[str] = None,
-        client_secret: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
         timeout: int = 15,
     ) -> None:
-        self.client_id = client_id
-        self.client_secret = client_secret
+        self.username = username
+        self.password = password
         self.timeout = timeout
         self._access_token: Optional[str] = None
 
     def _get_auth_header(self) -> Dict[str, str]:
         """Obtain or refresh Keycloak Bearer token if credentials are provided."""
-        if not (self.client_id and self.client_secret):
+        if not (self.username and self.password):
             return {}
 
         if self._access_token:
@@ -88,9 +88,10 @@ class CDSEClient:
 
         try:
             data = urllib.parse.urlencode({
-                "grant_type": "client_credentials",
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
+                "grant_type": "password",
+                "client_id": "cdse-public",
+                "username": self.username,
+                "password": self.password,
             }).encode("utf-8")
 
             req = urllib.request.Request(

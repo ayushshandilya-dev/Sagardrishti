@@ -1,0 +1,91 @@
+name: 🛰️ Sagardrishti Live Oil Spill Monitor
+
+on:
+  # Run automatically every 12 hours
+  schedule:
+    - cron: '0 */12 * * *'
+
+  # Also allow manual trigger from GitHub website with a custom region
+  workflow_dispatch:
+    inputs:
+      bbox:
+        description: 'Bounding Box (MinLat,MinLon,MaxLat,MaxLon)'
+        required: false
+        default: '18.5,71.5,19.5,72.5'
+      days:
+        description: 'Look back how many days?'
+        required: false
+        default: '3'
+
+jobs:
+  detect-oil-spills:
+    name: 🌊 Scan Mumbai Offshore Region
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # Step 1: Check out your repository code
+      - name: 📥 Checkout Sagardrishti Repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # Step 3: Install only the lightweight dependencies needed for live_monitor
+      # We skip torch/GPU packages since GitHub Actions uses CPU-only Linux runners
+      - name: 📦 Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install \
+            numpy>=1.26.0 \
+            rasterio>=1.3.0 \
+            psutil>=5.9.0 \
+            requests>=2.31.0 \
+            scipy>=1.11.0 \
+            scikit-image>=0.22.0 \
+            torch==2.1.0+cpu \
+            torchvision==0.16.0+cpu \
+            segmentation-models-pytorch>=0.3.3 \
+            timm>=0.9.0 \
+            --extra-index-url https://download.pytorch.org/whl/cpu
+
+      # Step 4: Run the live monitor script
+      # CDSE credentials are stored safely as GitHub Secrets (never visible in logs)
+      - name: 🛰️ Run Live Satellite Detection
+        env:
+          CDSE_USERNAME: ${{ secrets.CDSE_USERNAME }}
+          CDSE_PASSWORD: ${{ secrets.CDSE_PASSWORD }}
+        run: |
+          python scripts/live_monitor.py \
+            --username "$CDSE_USERNAME" \
+            --password "$CDSE_PASSWORD" \
+            --bbox "${{ github.event.inputs.bbox || '18.5,71.5,19.5,72.5' }}" \
+            --days "${{ github.event.inputs.days || '3' }}" \
+            | tee detection_report.txt
+
+      # Step 5: Save the detection report as a downloadable artifact
+      - name: 📊 Upload Detection Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: detection-report-${{ github.run_number }}
+          path: detection_report.txt
+          retention-days: 30
+
+      # Step 6: Post a summary to the GitHub Actions dashboard
+      - name: 📝 Write Job Summary
+        if: always()
+        run: |
+          echo "## 🛰️ Sagardrishti Satellite Scan Report" >> $GITHUB_STEP_SUMMARY
+          echo "**Run:** #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ github.event.inputs.bbox || 'Mumbai Offshore (18.5,71.5,19.5,72.5)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Time:** $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Detection Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat detection_report.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

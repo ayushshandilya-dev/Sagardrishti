@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""
+live_monitor.py
+SIH Automated Sentinel-1 Oil Spill Detection Pipeline
+
+This script acts as a daemon that polls the Copernicus Data Space Ecosystem (CDSE)
+for new Sentinel-1 GRD imagery over a target bounding box. When new data is published,
+it automatically downloads, extracts, and runs the Deep Learning Oil Spill detection pipeline.
+"""
+
+import os
+import time
+import glob
+import zipfile
+import urllib.request
+import argparse
+from datetime import datetime, timedelta
+import numpy as np
+import rasterio
+from rasterio.windows import Window
+import sys
+
+# Ensure Sagardrishti core is in the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from core.sar.cdse_client import CDSEClient
+from core.sar.cascade import CascadeOilSpillDetector, CascadeConfig
+
+def download_product(url, auth_headers, output_path):
+    """Streams a large file download from CDSE using urllib."""
+    print(f"Downloading from {url}...")
+    req = urllib.request.Request(url, headers=auth_headers)
+    
+    try:
+        with urllib.request.urlopen(req) as response, open(output_path, 'wb') as out_file:
+            # Get file size for basic progress reporting
+            file_size = response.getheader('Content-Length')
+            file_size = int(file_size) if file_size else 0
+            
+            downloaded = 0
+            block_size = 8192 * 4
+            while True:
+                buffer = response.read(block_size)
+                if not buffer:
+                    break
+                out_file.write(buffer)
+                downloaded += len(buffer)
+                if file_size > 0 and downloaded % (block_size * 2000) == 0:
+                    percent = (downloaded / file_size) * 100
+                    print(f"Progress: {percent:.1f}% ({downloaded / 1024 / 1024:.1f} MB)", end='\r')
+        print(f"\nDownload complete: {output_path}")
+        return True
+    except Exception as e:
+        print(f"\nDownload failed: {e}")
+        return False
+
+def process_safe_folder(safe_folder_path):
+    """Extracts TIFFs and runs the deep learning detection pipeline."""
+    print(f"\n--- PROCESSING NEW SATELLITE PASS ---")
+    meas_dir = os.path.join(safe_folder_path, "measurement")
+    if not os.path.exists(meas_dir):
+        print(f"Error: No 'measurement' folder found in {safe_folder_path}")
+        return
+        
+    vv_files = glob.glob(os.path.join(meas_dir, "*vv*.tiff"))
+    vh_files = glob.glob(os.path.join(meas_dir, "*vh*.tiff"))
+    
+    if not vv_files:
+        print("Error: Could not find VV TIFF file.")
+        return
+        
+    vv_path = vv_files[0]
+    vh_path = vh_files[0] if vh_files else None
+    
+    print("Loading radar arrays...")
+    CROP_SIZE = 4096
+    
+    with rasterio.open(vv_path) as src:
+        center_row, center_col = src.height // 2, src.width // 2
+        window = Window(center_col - CROP_SIZE//2, center_row - CROP_SIZE//2, CROP_SIZE, CROP_SIZE)
+        vv_dn = src.read(1, window=window).astype(np.float32)
+        
+    vh_dn = None
+    if vh_path:
+        with rasterio.open(vh_path) as src:
+            vh_dn = src.read(1, window=window).astype(np.float32)
+
+    print("Applying Radiometric Calibration...")
+    vv_db = 20.0 * np.log10(vv_dn + 1e-6) - 83.0
+    vh_db = 20.0 * np.log10(vh_dn + 1e-6) - 83.0 if vh_dn is not None else None
+
+    print("Running Cascade Oil Spill Detector...")
+    config = CascadeConfig(tile_size=512)
+    detector = CascadeOilSpillDetector(config=config)
+    results = detector.detect(vv_db=vv_db, vh_db=vh_db, land_mask=None)
+    
+    print("\n[ALERT] FINAL INFERENCE REPORT:")
+    print(f"Scene Status: {results.get('scene_status')}")
+    print(f"Total Slicks Detected: {results.get('num_slicks')}")
+    print(f"Analyzed Area Tiles: {results.get('stage1_telemetry', {}).get('total_tiles')}")
+    print("-" * 50)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Live Satellite Oil Spill Monitor")
+    parser.add_argument("--username", type=str, help="CDSE Account Email")
+    parser.add_argument("--password", type=str, help="CDSE Account Password")
+    parser.add_argument("--bbox", type=str, default="18.5,71.5,19.5,72.5", help="MinLat,MinLon,MaxLat,MaxLon (Default: Mumbai Offshore)")
+    parser.add_argument("--days", type=int, default=3, help="Look back X days for latest pass")
+    args = parser.parse_args()
+
+    # Parse Bounding Box
+    bbox_parts = [float(x) for x in args.bbox.split(",")]
+    bbox = tuple(bbox_parts)
+
+    client = CDSEClient(username=args.username, password=args.password)
+    
+    end_date = datetime.utcnow()
+    start_date = end_date - timedelta(days=args.days)
+    
+    print(f"Monitoring Region BBox: {bbox}")
+    print(f"Time Window: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+    
+    # 1. Authenticate
+    auth_headers = client._get_auth_header()
+    if not auth_headers:
+        print("[WARNING] Authentication failed. Running in offline demo mode on cached file...")
+        process_safe_folder("/Users/abhi_mishra1709/Downloads/S1D_IW_GRDH_1SDV_20260930T010238_20260930T010309_004800_00901B_8A28_COG.SAFE 3")
+        return
+    print("Authenticated with CDSE successfully.")
+
+    # 2. Query live OData catalog (verified working format)
+    import urllib.request as _ureq, urllib.parse as _uparse, json as _json
+    min_lat, min_lon, max_lat, max_lon = bbox
+    poly_wkt = (f"POLYGON(({min_lon} {min_lat},{max_lon} {min_lat},"
+                f"{max_lon} {max_lat},{min_lon} {max_lat},{min_lon} {min_lat}))")
+    ofilter = (
+        f"Collection/Name eq 'SENTINEL-1' "
+        f"and OData.CSC.Intersects(area=geography'SRID=4326;{poly_wkt}') "
+        f"and ContentDate/Start gt {start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')} "
+        f"and ContentDate/Start lt {end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')} "
+        f"and Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'productType' "
+        f"and att/OData.CSC.StringAttribute/Value eq 'GRD')"
+    )
+    params = _uparse.urlencode({'$filter': ofilter, '$orderby': 'ContentDate/Start desc', '$top': '3'})
+    catalog_url = f"https://catalogue.dataspace.copernicus.eu/odata/v1/Products?{params}"
+
+    print("Querying live CDSE satellite catalog...")
+    try:
+        req = _ureq.Request(catalog_url, headers=auth_headers)
+        with _ureq.urlopen(req, timeout=20) as resp:
+            items = _json.loads(resp.read().decode('utf-8')).get('value', [])
+    except Exception as e:
+        print(f"Catalog query failed: {e}")
+        return
+
+    if not items:
+        print("No new Sentinel-1 passes found. Try increasing --days.")
+        return
+
+    latest = items[0]
+    product_id = latest.get('Id')
+    product_name = latest.get('Name', '')
+    sensing_time = latest.get('ContentDate', {}).get('Start', 'Unknown')
+    download_url = f"https://catalogue.dataspace.copernicus.eu/odata/v1/Products({product_id})/$value"
+
+    print(f"\n[NEW DATA FOUND!] Satellite Pass: {product_name}")
+    print(f"Sensing Time:  {sensing_time}")
+    print(f"Product ID:    {product_id}")
+
+    # 3. Set up paths
+    download_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "live_feed"))
+    os.makedirs(download_dir, exist_ok=True)
+    zip_path = os.path.join(download_dir, f"{product_id}.zip")
+    # product_name from CDSE API already ends in .SAFE — do NOT append again
+    safe_folder_path = os.path.join(download_dir, product_name)
+
+    if os.path.exists(safe_folder_path):
+        print(f"\nAlready downloaded: {product_name}. Processing cached copy...")
+        process_safe_folder(safe_folder_path)
+        return
+
+    # 4. Download
+    success = download_product(download_url, auth_headers, zip_path)
+    if not success:
+        return
+
+    print("Unzipping product...")
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(download_dir)
+    os.remove(zip_path)
+
+    # 5. Run inference
+    process_safe_folder(safe_folder_path)
+
+if __name__ == "__main__":
+    main()
