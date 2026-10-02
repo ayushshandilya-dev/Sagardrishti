@@ -1221,7 +1221,18 @@ export const RealMaritimeMap: React.FC<RealMaritimeMapProps> = ({
 
       // Seamless Apple Maps / Google Earth flight: from orbit down to tactical COP
       setTimeout(() => {
-        flyToPose(map, TACTICAL_COP);
+        if (incident && incident.spillGeometry) {
+          flyToPose(map, {
+            center: [incident.spillGeometry.centroid.longitude, incident.spillGeometry.centroid.latitude],
+            zoom: 8.5,
+            pitch: 25,
+            bearing: -5,
+            duration: 2800,
+            curve: 1.4,
+          });
+        } else {
+          flyToPose(map, TACTICAL_COP);
+        }
       }, 400);
     });
 
