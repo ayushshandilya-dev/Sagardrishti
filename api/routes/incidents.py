@@ -42,11 +42,10 @@ async def get_incidents():
     # Prepend the live detection as the newest incident if it exists
     live = _load_live_detection()
     if live:
-        # Remove any previous live detection from the list to avoid duplicates
-        base = [i for i in base if not i.get("eventId", "").startswith("SD-LIVE-")]
-        base.insert(0, live)
-
-    return base
+        return [live]
+        
+    # If no live data is found at all, return just ONE mock incident so the UI doesn't crash on an empty state
+    return [MOCK_SAR_SCENES[0]]
 
 
 @router.get("/{event_id}", response_model=dict[str, Any])
