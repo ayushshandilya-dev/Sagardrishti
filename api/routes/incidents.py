@@ -51,11 +51,16 @@ async def get_incidents():
 
 @router.get("/{event_id}", response_model=dict[str, Any])
 async def get_incident(event_id: str):
-    """Retrieve a specific incident by its event ID (persisted store)."""
+    """Retrieve a specific incident by its event ID (persisted store or live detection)."""
     with db.session_scope() as session:
         row = session.query(IncidentRow).filter(IncidentRow.event_id == event_id).first()
     if row is not None:
         return row.data
+
+    # Check live satellite detection first (SD-LIVE-* IDs)
+    live = _load_live_detection()
+    if live and live.get("eventId") == event_id:
+        return live
 
     for scene in MOCK_SAR_SCENES:
         if scene["eventId"] == event_id:
