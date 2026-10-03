@@ -15,7 +15,7 @@ import {
   MOCK_EVIDENCE_MANIFEST,
 } from "./mockData";
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://sagar-drishti-api.onrender.com";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
 function headers(extra: Record<string, string> = {}): Record<string, string> {
